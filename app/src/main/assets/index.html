@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Another Distraction · Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--fg:#e9f0ff;--dim:#8a93a8;--acc:#7cf3ff;--hot:#ff5fd2;--mono:'JetBrains Mono',ui-monospace,monospace;--sans:'Space Grotesk',system-ui,sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas#c{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:block;background:#000}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* start panel */
+#start{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;gap:22px;
+  padding:calc(28px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));
+  background:radial-gradient(120% 80% at 50% 110%,rgba(0,0,0,.2),rgba(0,0,0,.78) 60%);transition:opacity .5s;z-index:5}
+#start.gone{opacity:0;pointer-events:none}
+.brand{font-family:var(--sans);font-weight:700;letter-spacing:.02em;line-height:.92;font-size:clamp(38px,11vw,84px);text-transform:uppercase}
+.brand em{display:block;font-family:var(--mono);font-style:normal;font-weight:400;font-size:.26em;letter-spacing:.5em;color:var(--acc);margin-top:.7em}
+.glitch{position:relative;display:inline-block}
+.glitch::before,.glitch::after{content:attr(data-t);position:absolute;inset:0;mix-blend-mode:screen;pointer-events:none}
+.glitch::before{color:#ff2bd6;animation:g1 3.2s infinite steps(1)}
+.glitch::after{color:#19f0ff;animation:g2 2.7s infinite steps(1)}
+@keyframes g1{0%,88%,100%{transform:none;clip-path:inset(0 0 0 0);opacity:0}89%{opacity:1;transform:translate(-4px,1px);clip-path:inset(12% 0 60% 0)}92%{opacity:1;transform:translate(3px,-2px);clip-path:inset(55% 0 20% 0)}95%{opacity:1;transform:translate(-2px,0);clip-path:inset(30% 0 45% 0)}}
+@keyframes g2{0%,90%,100%{transform:none;opacity:0}91%{opacity:1;transform:translate(4px,0);clip-path:inset(40% 0 35% 0)}94%{opacity:1;transform:translate(-3px,2px);clip-path:inset(5% 0 75% 0)}}
+.tag{font-family:var(--mono);font-size:14px;line-height:1.55;color:#c8d0e0;max-width:30em;margin:0}
+.btns{display:flex;flex-direction:column;gap:10px;max-width:360px}
+.btns .btn{position:relative;overflow:hidden;cursor:pointer}
+.btns .btn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.btns button,.btns .btn{font-family:var(--mono);font-size:15px;text-align:left;padding:14px 16px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(10,14,24,.55);backdrop-filter:blur(6px);display:flex;justify-content:space-between;align-items:center}
+.btns button span,.btns .btn span{color:var(--dim);font-size:12px}
+.btns button.pri{border-color:var(--acc);background:rgba(124,243,255,.12);color:#fff}
+.btns button:active,.btns .btn:active{transform:scale(.98)}
+#note{font-family:var(--mono);font-size:12.5px;line-height:1.5;color:#ffb36b;margin:0;max-width:30em;min-height:1em}
+.how{list-style:none;padding:0;margin:0;font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.9}
+.how b{color:var(--fg);font-weight:600}
+.credo{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:#59607a;text-transform:uppercase;margin:0}
+
+/* hud */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:3;transition:opacity .4s;
+  padding:calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  display:flex;flex-direction:column;justify-content:space-between}
+#hud.off{opacity:0}
+#hud .top{display:flex;justify-content:space-between;align-items:flex-start}
+#mname{font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:.14em}
+#mname small{display:block;font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.04em;color:var(--dim);margin-top:3px}
+#dots{display:flex;gap:6px;padding-top:8px}
+#dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}
+#dots i.on{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+#hud .bot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.info{font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:5px}
+#chord{font-size:15px;color:var(--fg);display:flex;align-items:center;gap:8px}
+#chord i{width:10px;height:10px;border-radius:50%;display:inline-block;transition:background 1s}
+#scope{width:140px;height:28px;opacity:.85}
+.ctl{display:flex;gap:8px;pointer-events:auto}
+.ctl button{width:44px;height:44px;border-radius:50%;background:rgba(8,10,18,.5);border:1px solid rgba(255,255,255,.18);display:grid;place-items:center;backdrop-filter:blur(6px)}
+.ctl button svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ctl button.muted{border-color:#ff7a7a}
+#toast{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;text-align:center;opacity:0;transition:opacity .35s}
+#toast.show{opacity:1}
+#toast b{display:block;font-family:var(--sans);font-size:clamp(30px,9vw,64px);letter-spacing:.12em;text-shadow:0 0 24px rgba(124,243,255,.6)}
+#toast span{font-family:var(--mono);font-size:13px;color:#cfd6e6}
+#param{position:fixed;right:calc(10px + env(safe-area-inset-right));top:30%;height:40%;width:4px;border-radius:2px;background:rgba(255,255,255,.15);z-index:4;opacity:0;transition:opacity .4s;pointer-events:none}
+#param.show{opacity:1}
+#param i{position:absolute;left:0;right:0;bottom:0;border-radius:2px;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+#err{position:fixed;inset:0;display:none;place-items:center;padding:30px;font-family:var(--mono);font-size:13px;color:#ffb36b;background:#000;z-index:9;white-space:pre-wrap;overflow:auto}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="off">
+  <div class="top">
+    <div id="mname">LATTICE<small>light grows a lattice</small></div>
+    <div id="dots"></div>
+  </div>
+  <div class="bot">
+    <div class="info">
+      <div id="chord"><i></i><span>D sus2</span></div>
+      <canvas id="scope" width="280" height="56"></canvas>
+      <div id="srcl">synthetic</div>
+    </div>
+    <div class="ctl">
+      <button id="bMute" title="Sound (M)"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="wav" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+      <button id="bFlip" title="Flip camera (C)"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13.5a3 3 0 0 1 5.2-2M15 12.5a3 3 0 0 1-5.2 2"/></svg></button>
+      <button id="bFs" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button id="bSrc" title="Source"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</div>
+<div id="toast"><b></b><span></span></div>
+<div id="param"><i></i></div>
+
+<div id="start">
+  <div class="brand"><span class="glitch" data-t="Another Distraction">Another Distraction</span><em>live</em></div>
+  <p class="tag">Point the camera at something shiny. Everything it sees becomes light, and the light becomes sound.</p>
+  <div class="btns">
+    <button id="bCam" class="pri">Live camera <span>rear</span></button>
+    <label class="btn" id="bRec">Record a clip <span>phone camera</span><input id="fRec" type="file" accept="video/*" capture="environment"></label>
+    <label class="btn" id="bPick">Choose a video or photo <span>file</span><input id="fPick" type="file" accept="video/*,image/*"></label>
+    <button id="bSyn">Synthetic scene <span>no camera</span></button>
+  </div>
+  <p id="note"></p>
+  <ul class="how">
+    <li><b>swipe ← →</b> change effect</li>
+    <li><b>drag ↑ ↓</b> shape it</li>
+    <li><b>hold</b> hyperfocus on one colour</li>
+    <li><b>double-tap</b> flip camera · <b>tap</b> hide controls</li>
+  </ul>
+  <p class="credo">I shall use my time.</p>
+</div>
+<div id="err"></div>
+
+<video id="vid" playsinline muted loop style="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none"></video>
+
+<script>
+'use strict';
+/* =====================================================================
+   Another Distraction · Live
+   camera -> GPU effect -> analysis readback -> procedural soundscape
+   Everything is one WebGL2 context + one AudioContext.
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const cv = $('#c');
+const gl = cv.getContext('webgl2', {antialias:false, alpha:false, depth:false, stencil:false,
+  premultipliedAlpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance'});
+function fatal(msg){ const e=$('#err'); e.textContent=msg; e.style.display='grid'; throw new Error(msg); }
+if (!gl) fatal('This needs WebGL2, which this browser or viewer does not provide.');
+
+const MOBILE = matchMedia('(pointer:coarse)').matches;
+const IN_APP = location.host==='appassets.androidplatform.net';
+const HISTN = 48;
+
+/* ------------------------------ shaders ------------------------------ */
+const VS = `#version 300 es
+out vec2 vUv;
+void main(){ vec2 p=vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2)); vUv=p; gl_Position=vec4(p*2.-1.,0.,1.); }`;
+
+const HEAD = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2DArray;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uCur, uPrev, uFb;
+uniform sampler2DArray uHist;
+uniform int uHead, uHistN;
+uniform vec2 uRes;
+uniform float uTime, uParam, uBright, uMotion, uPulse;
+const float PI=3.14159265, TAU=6.2831853;
+float luma(vec3 c){return dot(c,vec3(.2126,.7152,.0722));}
+float hash12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
+vec2 hash22(vec2 p){vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));p3+=dot(p3,p3.yzx+33.33);return fract((p3.xx+p3.yz)*p3.zy);}
+vec3 hsv2rgb(vec3 c){vec3 p=abs(fract(c.xxx+vec3(0.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);}
+vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));
+  vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-min(q.w,q.y);float e=1e-10;
+  return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
+vec3 hueRot(vec3 c,float a){
+  const mat3 toY=mat3(.299,.596,.211,.587,-.274,-.523,.114,-.322,.312);
+  const mat3 toR=mat3(1.,1.,1.,.956,-.272,-1.106,.621,-.647,1.703);
+  vec3 y=toY*c; float cs=cos(a),sn=sin(a); y.yz=mat2(cs,sn,-sn,cs)*y.yz; return max(toR*y,0.);}
+`;
+
+/* source: camera / file / synthetic scene, cover-fitted to the screen */
+const FS_SRC = HEAD + `
+uniform sampler2D uVid; uniform int uSynth; uniform vec2 uScale; uniform float uMirror; uniform vec3 uDrift;
+vec3 synth(vec2 uv){
+  float t=uTime; vec2 a=vec2(uRes.x/uRes.y,1.); vec2 p=uv*a;
+  vec3 col=mix(vec3(.015,.02,.05),vec3(.07,.035,.09),uv.y);
+  col+=vec3(.12,.06,.02)*smoothstep(.45,0.,uv.y);
+  for(int i=0;i<16;i++){ float fi=float(i); vec2 h=hash22(vec2(fi,7.3));
+    vec2 c=vec2(.5*a.x,.5)+vec2(sin(t*(.13+h.x*.25)+fi*1.7)*.46*a.x, sin(t*(.11+h.y*.2)+fi*2.3)*.43);
+    float r=.03+.08*h.y; float d=length(p-c);
+    vec3 hc=hsv2rgb(vec3(fract(h.x*1.7+t*.01),.7,1.));
+    col+=hc*smoothstep(r,r*.7,d)*(.25+.4*h.x); }
+  vec2 fc=vec2(.5*a.x+sin(t*.4)*.2*a.x,.3);
+  float body=smoothstep(.2,.18,length((p-fc)*vec2(1.,.55)));
+  float head=smoothstep(.075,.07,length(p-fc-vec2(sin(t*.4+.3)*.02,.27)));
+  col=mix(col,vec3(.01),max(body,head)*.92);
+  float k=mod(t,6.5); float lane=floor(t/6.5);
+  vec2 sp=vec2(mix(-.1,1.1,k/2.2)*a.x,.62+.2*sin(k*2.+lane*1.7));
+  float sd=length(p-sp);
+  col+=step(k,2.2)*vec3(1.,.93,.75)*(smoothstep(.03,0.,sd)*3.+.0008/(sd*sd+.0004));
+  col+=(hash12(uv*uRes+fract(t)*97.)-.5)*.035;
+  return max(col,0.);
+}
+void main(){
+  if(uSynth==1){ o=vec4(synth(vUv),1.); return; }
+  vec2 uv=.5+(vUv-.5)*uScale/uDrift.x+uDrift.yz;
+  if(uMirror>.5) uv.x=1.-uv.x;
+  o=vec4(texture(uVid,uv).rgb,1.);
+}`;
+
+const FS_COPY = HEAD + `void main(){ o=vec4(texture(uCur,vUv).rgb,1.); }`;
+
+/* 0 — LATTICE: the dome lattice, grown from whatever is bright */
+const FS_LATTICE = HEAD + `
+vec2 nodeP(vec2 v,float s){
+  vec2 h=hash22(v)-.5;
+  vec2 j=h*.26*vec2(sin(uTime*.7+v.x*1.3+h.y*6.),cos(uTime*.6+v.y*1.7+h.x*6.));
+  vec2 vv=v+j; return vec2(vv.x+.5*vv.y,.8660254*vv.y)*s; }
+float segD(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h);}
+void main(){
+  float s=mix(14.,72.,uParam)*uRes.y/1400.;
+  vec2 px=vUv*uRes;
+  vec2 q=vec2(px.x/s-.5*(px.y/s)/.8660254,(px.y/s)/.8660254);
+  vec2 i=floor(q),f=fract(q);
+  vec2 v0=i+vec2(1,0), v1=i+vec2(0,1), v2=(f.x+f.y<1.)?i:i+vec2(1,1);
+  vec2 P[3]; P[0]=nodeP(v0,s); P[1]=nodeP(v1,s); P[2]=nodeP(v2,s);
+  vec3 C[3]; float N[3]; float M[3];
+  float norm=.5/max(uBright,.12);
+  for(int k=0;k<3;k++){ vec2 uv=clamp(P[k]/uRes,0.,1.); vec3 c=texture(uCur,uv).rgb; float L=luma(c);
+    C[k]=normalize(c+.002)*1.7; N[k]=smoothstep(.26,.95,L*norm);
+    M[k]=smoothstep(.035,.22,abs(L-luma(texture(uPrev,uv).rgb))); }
+  vec3 strut=vec3(.22,.42,1.), tip=vec3(1.,.78,.5);
+  vec3 col=vec3(.006,.012,.035)+texture(uCur,vUv).rgb*.045;
+  float w=max(1.,s*.035);
+  for(int k=0;k<3;k++){ int a=k, b=(k+1)%3;
+    float e=min(N[a],N[b]); if(e<=0.) continue;
+    float d=segD(px,P[a],P[b]);
+    vec3 ec=mix(strut,(C[a]+C[b])*.5,.72);
+    col+=ec*(exp(-d*d/(w*w))+exp(-d/(w*5.))*.22)*e*(1.1+2.6*max(M[a],M[b])); }
+  for(int k=0;k<3;k++){ float d=length(px-P[k]); float r=s*(.045+.13*N[k]+.12*M[k]);
+    col+=mix(C[k],tip,M[k])*(exp(-d*d/(r*r))*(N[k]+M[k]*1.6)+exp(-d/(r*2.2))*.08*N[k]); }
+  vec3 fb=texture(uFb,vUv).rgb;
+  o=vec4(max(col,fb*.8),1.);
+}`;
+
+/* 1 — SMEAR: motion is advected through feedback and repainted in colour */
+const FS_SMEAR = HEAD + `
+void main(){
+  vec2 px=1./uRes;
+  vec3 cur=texture(uCur,vUv).rgb; float c=luma(cur), p=luma(texture(uPrev,vUv).rgb);
+  float gx=luma(texture(uCur,vUv+vec2(2.,0.)*px).rgb)-luma(texture(uCur,vUv-vec2(2.,0.)*px).rgb);
+  float gy=luma(texture(uCur,vUv+vec2(0.,2.)*px).rgb)-luma(texture(uCur,vUv-vec2(0.,2.)*px).rgb);
+  vec2 g=vec2(gx,gy); float dt=c-p;
+  vec2 flow=clamp(-dt*g/(dot(g,g)+.004),-6.,6.);
+  float ang=.0025*sin(uTime*.31); vec2 cen=vUv-.5;
+  cen=mat2(cos(ang),sin(ang),-sin(ang),cos(ang))*cen*(1.-.004*uParam);
+  vec3 fb=texture(uFb,cen+.5-flow*px*mix(2.,14.,uParam)).rgb;
+  fb=hueRot(fb,.035)*.972;
+  float m=smoothstep(.025,.18,abs(dt));
+  vec3 inj=hueRot(cur*1.5,uTime*.6+c*4.);
+  vec3 col=mix(fb,inj,m);
+  col=max(col,cur*.22);
+  o=vec4(col,1.);
+}`;
+
+/* 2 — ECHO: every pixel is a different moment; colour channels lag apart with motion */
+const FS_ECHO = HEAD + `
+vec3 hist(float f){ float N=float(uHistN); f=clamp(f,0.,N-2.); float fl=floor(f);
+  int l0=(uHead-int(fl)+uHistN*4)%uHistN; int l1=(l0-1+uHistN)%uHistN;
+  return mix(texture(uHist,vec3(vUv,float(l0))).rgb,texture(uHist,vec3(vUv,float(l1))).rgb,f-fl); }
+void main(){
+  vec3 cur=texture(uCur,vUv).rgb; float L=luma(cur);
+  float N=float(uHistN);
+  float slit=1.-vUv.y+.06*sin(vUv.x*9.+uTime*.7);
+  float d=mix(slit,1.-smoothstep(.05,.85,L),smoothstep(0.,1.,uParam));
+  float base=d*(N-10.);
+  float spread=clamp(1.5+uMotion*40.,1.5,4.);
+  vec3 col=vec3(hist(base).r,hist(base+spread).g,hist(base+2.*spread).b);
+  col*=.93+.07*smoothstep(0.,.2,fract(base));
+  o=vec4(col*1.05,1.);
+}`;
+
+/* 3 — DOME: a 180° domemaster kaleidoscope, bursting out from the zenith */
+const FS_DOME = HEAD + `
+void main(){
+  float mn=min(uRes.x,uRes.y);
+  vec2 cp=vUv*uRes-.5*uRes; vec2 p=cp/(.5*mn)*1.06; float r=length(p);
+  float z=1.-.01-.03*uMotion; float a=.005;
+  vec2 c=mat2(cos(a),sin(a),-sin(a),cos(a))*cp*z;
+  vec3 tun=hueRot(texture(uFb,(c+.5*uRes)/uRes).rgb,.025)*.935;
+  if(r>1.){
+    vec2 cell=floor(vUv*uRes/2.); float st=step(.9975,hash12(cell))*(.5+.5*sin(uTime*2.+hash12(cell+3.)*30.));
+    o=vec4(tun*.5*smoothstep(1.3,1.,r)+vec3(st*.7)+vec3(.3,.5,1.)*exp(-pow((r-1.)*70.,2.))*.6,1.); return; }
+  float segs=floor(mix(3.,13.,uParam));
+  float th=atan(p.y,p.x)+uTime*.05; float sw=TAU/segs; th=mod(th,sw); th=abs(th-.5*sw);
+  float rr=pow(r,1.2)*(.86+.1*sin(uTime*.13));
+  vec2 suv=.5+vec2(cos(th),sin(th))*rr*.5;
+  vec3 cam=texture(uCur,suv).rgb;
+  float key=smoothstep(.1,.5,luma(cam));
+  vec3 col=mix(tun,cam*1.35,key*.65+.35);
+  col+=vec3(.25,.4,1.)*exp(-pow((1.-r)*38.,2.))*.55;
+  col+=vec3(1.,.9,.7)*exp(-r*r*900.)*(.4+uPulse);
+  o=vec4(col,1.);
+}`;
+
+/* 4 — NEON: edges as light, coloured by direction, rising like heat */
+const FS_NEON = HEAD + `
+float L(vec2 o2){return luma(texture(uCur,vUv+o2).rgb);}
+void main(){
+  vec2 px=1.6/uRes;
+  float tl=L(vec2(-px.x,px.y)),tc=L(vec2(0.,px.y)),tr=L(px),ml=L(vec2(-px.x,0.)),mr=L(vec2(px.x,0.)),
+        bl=L(-px),bc=L(vec2(0.,-px.y)),br=L(vec2(px.x,-px.y));
+  float gx=(tr+2.*mr+br)-(tl+2.*ml+bl), gy=(tl+2.*tc+tr)-(bl+2.*bc+br);
+  float e=length(vec2(gx,gy));
+  float m=abs(luma(texture(uCur,vUv).rgb)-luma(texture(uPrev,vUv).rgb));
+  vec3 hc=hsv2rgb(vec3(fract(atan(gy,gx)/TAU+uTime*.05+vUv.y*.2),.85,1.));
+  vec3 neon=hc*smoothstep(.07,.45,e)*(1.+m*14.)*1.25;
+  float rise=(1.+uParam*5.)/uRes.y;
+  vec2 fuv=vUv-vec2(sin(vUv.y*40.+uTime*3.)*.0016*uParam,rise);
+  vec3 fb=hueRot(texture(uFb,fuv).rgb,.016)*mix(.85,.97,uParam);
+  o=vec4(max(neon,fb),1.);
+}`;
+
+/* 5 — DRIP: bright things melt down the screen */
+const FS_DRIP = HEAD + `
+void main(){
+  vec3 cur=texture(uCur,vUv).rgb; float L=luma(cur);
+  float col=floor(vUv.x*uRes.x/2.);
+  float sp=(1.+hash12(vec2(col,1.))*5.)*(.4+uParam*2.4)/uRes.y;
+  vec3 f=hueRot(texture(uFb,vUv+vec2(0.,sp)).rgb,.006);
+  float thr=clamp(uBright*1.2+.3,.5,.9);
+  f*=luma(f)>thr*.8?.972:.78;
+  vec3 hot=cur*smoothstep(thr,thr+.15,L)*1.15;
+  o=vec4(max(cur*.6,max(hot,f)),1.);
+}`;
+
+/* analysis: per-cell average colour of the OUTPUT + source motion */
+const FS_ANA = HEAD + `
+uniform vec2 uGrid;
+void main(){
+  vec2 cell=floor(gl_FragCoord.xy); vec3 s=vec3(0.); float m=0.;
+  for(int j=0;j<4;j++) for(int i=0;i<4;i++){
+    vec2 uv=(cell+(vec2(i,j)+.5)/4.)/uGrid;
+    s+=texture(uFb,uv).rgb;
+    m+=abs(luma(texture(uCur,uv).rgb)-luma(texture(uPrev,uv).rgb)); }
+  o=vec4(clamp(s/16.,0.,1.),clamp(m/16.*4.,0.,1.));
+}`;
+
+/* final grade to the screen */
+const FS_OUT = HEAD + `
+uniform float uFocus, uFocusHue, uTintAmt, uGlitch; uniform vec3 uTint;
+void main(){
+  vec2 uv=vUv;
+  if(uGlitch>.01){ float row=floor(uv.y*46.); float h=hash12(vec2(row,floor(uTime*18.)));
+    if(h<uGlitch*.4) uv.x+=(hash12(vec2(row,floor(uTime*18.)+3.))-.5)*.14*uGlitch; }
+  vec2 dir=uv-.5; float ca=.0012+uPulse*.006+uGlitch*.012;
+  vec3 c=vec3(texture(uFb,uv-dir*ca).r,texture(uFb,uv).g,texture(uFb,uv+dir*ca).b);
+  if(uFocus>.001){ vec3 h=rgb2hsv(c); float dh=abs(fract(h.x-uFocusHue+.5)-.5);
+    float keep=smoothstep(.1,.035,dh)*smoothstep(.12,.3,h.y);
+    c=mix(c,vec3(luma(c))*.1,uFocus*(1.-keep)); c*=1.+keep*uFocus*.7; }
+  c=mix(c,luma(c)*uTint*1.8,uTintAmt*.22);
+  c*=1.+uPulse*.16;
+  vec3 x=max(c-.8,0.); c=min(c,.8)+.2*(1.-exp(-x*3.));
+  float v=smoothstep(1.3,.3,length((vUv-.5)*vec2(uRes.x/uRes.y,1.)*1.15));
+  c*=mix(.5,1.,v);
+  c+=(hash12(vUv*uRes+fract(uTime)*91.)-.5)*.035;
+  o=vec4(c,1.);
+}`;
+
+/* comet ribbons + glows/rings, drawn additively into the feedback buffer */
+const VS_RIB = `#version 300 es
+layout(location=0) in vec2 aPos; layout(location=1) in vec3 aCol; layout(location=2) in vec2 aV;
+out vec3 vCol; out vec2 vV;
+void main(){ vCol=aCol; vV=aV; gl_Position=vec4(aPos*2.-1.,0.,1.); }`;
+const FS_RIB = `#version 300 es
+precision highp float; in vec3 vCol; in vec2 vV; out vec4 o;
+void main(){ float x=vV.x, I=vV.y; vec3 c=mix(vCol,vec3(1.),exp(-x*x*24.)*.65)*(exp(-x*x*3.5)*I*1.6);
+  o=vec4(c,1.); }`;
+const VS_PT = `#version 300 es
+layout(location=0) in vec2 aPos; layout(location=1) in float aSize; layout(location=2) in vec3 aCol; layout(location=3) in vec2 aK;
+out vec3 vCol; out vec2 vK;
+void main(){ vCol=aCol; vK=aK; gl_PointSize=aSize; gl_Position=vec4(aPos*2.-1.,0.,1.); }`;
+const FS_PT = `#version 300 es
+precision highp float; in vec3 vCol; in vec2 vK; out vec4 o;
+void main(){ vec2 q=gl_PointCoord*2.-1.; float r=length(q); if(r>1.) discard;
+  float a = vK.x<.5 ? exp(-r*r*9.)*1.6+exp(-r*r*2.5)*.35 : exp(-pow((r-.82)/.07,2.))+exp(-pow((r-.82)/.25,2.))*.15;
+  o=vec4(mix(vCol,vec3(1.),vK.x<.5?exp(-r*r*30.):0.)*a*vK.y,1.); }`;
+
+/* ------------------------------ GL helpers ------------------------------ */
+function compile(fs, vs=VS){
+  const p=gl.createProgram();
+  for (const [type,src] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){
+    const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))
+      fatal('Shader error:\n'+gl.getShaderInfoLog(s)+'\n'+src.split('\n').map((l,i)=>(i+1)+': '+l).join('\n'));
+    gl.attachShader(p,s);
+  }
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) fatal('Link error: '+gl.getProgramInfoLog(p));
+  p.u={}; gl.useProgram(p);
+  for (const [n,v] of [['uCur',0],['uPrev',1],['uFb',2],['uHist',3],['uVid',4]]){ const l=gl.getUniformLocation(p,n); if(l) gl.uniform1i(l,v); }
+  return p;
+}
+const U=(p,n)=> (n in p.u) ? p.u[n] : (p.u[n]=gl.getUniformLocation(p,n));
+function tex2D(w,h,ifmt=gl.RGBA8,type=gl.UNSIGNED_BYTE,filter=gl.LINEAR){
+  const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,ifmt,w,h,0,gl.RGBA,type,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return t;
+}
+function fbo(t){ const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT); return f; }
+gl.getExtension('EXT_color_buffer_float'); gl.getExtension('EXT_color_buffer_half_float');
+const FBFMT = (()=>{ const t=tex2D(4,4,gl.RGBA16F,gl.HALF_FLOAT); const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.deleteFramebuffer(f); gl.deleteTexture(t);
+  return ok?[gl.RGBA16F,gl.HALF_FLOAT]:[gl.RGBA8,gl.UNSIGNED_BYTE]; })();
+
+const MODES = [
+  {name:'LATTICE', blurb:'light grows a lattice',            fs:FS_LATTICE, snd:{rev:.38,dly:.10,ratio:3.5, idx:1.6,dec:2.8,glide:1}},
+  {name:'SMEAR',   blurb:'motion paints itself in colour',   fs:FS_SMEAR,   snd:{rev:.25,dly:.30,ratio:1.0, idx:2.4,dec:1.1,glide:1}},
+  {name:'ECHO',    blurb:'every pixel is a different moment',fs:FS_ECHO,    snd:{rev:.30,dly:.45,ratio:2.0, idx:1.2,dec:1.8,glide:1}},
+  {name:'DOME',    blurb:'a fulldome kaleidoscope',          fs:FS_DOME,    snd:{rev:.62,dly:.15,ratio:3.5, idx:1.0,dec:4.0,glide:1}},
+  {name:'NEON',    blurb:'edges become light',               fs:FS_NEON,    snd:{rev:.22,dly:.25,ratio:1.5, idx:3.0,dec:0.9,glide:1}},
+  {name:'DRIP',    blurb:'bright things melt',               fs:FS_DRIP,    snd:{rev:.42,dly:.20,ratio:2.76,idx:1.4,dec:2.4,glide:.89}},
+];
+const progs = { src:compile(FS_SRC), copy:compile(FS_COPY), ana:compile(FS_ANA), out:compile(FS_OUT),
+  rib:compile(FS_RIB,VS_RIB), pt:compile(FS_PT,VS_PT), fx:MODES.map(m=>compile(m.fs)) };
+const emptyVao = gl.createVertexArray();
+
+/* dynamic geometry for ribbons and points */
+const RIB_MAX=2048, PT_MAX=256;
+const ribData=new Float32Array(RIB_MAX*7), ptData=new Float32Array(PT_MAX*8);
+const ribVao=gl.createVertexArray(); gl.bindVertexArray(ribVao);
+const ribBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ribBuf); gl.bufferData(gl.ARRAY_BUFFER,ribData.byteLength,gl.DYNAMIC_DRAW);
+[[0,2,0],[1,3,8],[2,2,20]].forEach(([l,n,off])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,28,off);});
+const ptVao=gl.createVertexArray(); gl.bindVertexArray(ptVao);
+const ptBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ptBuf); gl.bufferData(gl.ARRAY_BUFFER,ptData.byteLength,gl.DYNAMIC_DRAW);
+[[0,2,0],[1,1,8],[2,3,12],[3,2,24]].forEach(([l,n,off])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,32,off);});
+gl.bindVertexArray(null);
+const PT_RANGE = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
+
+/* video texture */
+const vidTex = tex2D(2,2);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+
+/* ------------------------------ render targets ------------------------------ */
+let W=0,H=0,R=null;
+function resize(){
+  const dpr=Math.min(devicePixelRatio||1,2.5), cw=innerWidth, ch=innerHeight;
+  const maxPix=MOBILE?760000:1500000;
+  const k=Math.min(1,Math.sqrt(maxPix/(cw*ch*dpr*dpr)));
+  const nw=Math.max(2,Math.round(cw*dpr*k)), nh=Math.max(2,Math.round(ch*dpr*k));
+  if(R && nw===W && nh===H) return;
+  W=nw; H=nh; cv.width=W; cv.height=H;
+  if(R){ [...R.src,...R.fb,R.ana,R.hist].forEach(t=>gl.deleteTexture(t)); [...R.srcF,...R.fbF,R.anaF,R.histF].forEach(f=>gl.deleteFramebuffer(f)); gl.deleteBuffer(R.pbo); if(R.fence) gl.deleteSync(R.fence); }
+  const src=[tex2D(W,H),tex2D(W,H)], fb=[tex2D(W,H,...FBFMT),tex2D(W,H,...FBFMT)];
+  const long=288, hw=W>=H?long:Math.round(long*W/H), hh=W>=H?Math.round(long*H/W):long;
+  const hist=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,hist);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,hw,hh,HISTN);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const GX=W<=H?16:Math.round(16*W/H), GY=W<=H?Math.min(40,Math.round(16*H/W)):16;
+  const ana=tex2D(GX,GY,gl.RGBA8,gl.UNSIGNED_BYTE,gl.NEAREST);
+  const pbo=gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER,GX*GY*4,gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  R={src,srcF:src.map(fbo),fb,fbF:fb.map(fbo),hist,histF:gl.createFramebuffer(),hw,hh,ana,anaF:fbo(ana),GX,GY,pbo,fence:null,
+     si:0, fi:0, head:0, anaBuf:new Uint8Array(GX*GY*4)};
+  for(let l=0;l<HISTN;l++){ gl.bindFramebuffer(gl.FRAMEBUFFER,R.histF); gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,hist,0,l); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  A.reset(GX*GY);
+}
+
+/* ------------------------------ sources ------------------------------ */
+const vid=$('#vid'); const img=new Image();
+const S={kind:'synth', facing:'environment', stream:null, newFrame:true, mirror:false, imgReady:false, label:'synthetic scene'};
+function stopStream(){ if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; } vid.pause(); vid.srcObject=null; if(vid.src){ URL.revokeObjectURL(vid.src); vid.removeAttribute('src'); vid.load(); } }
+function watchFrames(){ if(vid.requestVideoFrameCallback){ const cb=()=>{ S.newFrame=true; vid.requestVideoFrameCallback(cb); }; vid.requestVideoFrameCallback(cb); } }
+async function useCamera(facing){
+  if(!navigator.mediaDevices?.getUserMedia) throw new Error('nocam');
+  const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}});
+  stopStream(); S.stream=stream; vid.srcObject=stream; await vid.play();
+  Object.assign(S,{kind:'cam',facing,mirror:facing==='user',label:facing==='user'?'live · front camera':'live · rear camera'}); watchFrames();
+}
+async function useFile(file){
+  stopStream();
+  if(file.type.startsWith('image/')){
+    img.onload=()=>{ gl.bindTexture(gl.TEXTURE_2D,vidTex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img); S.imgReady=true; };
+    S.imgReady=false; img.src=URL.createObjectURL(file);
+    Object.assign(S,{kind:'img',mirror:false,label:'photo · '+file.name});
+  } else {
+    vid.src=URL.createObjectURL(file); vid.loop=true; vid.muted=true; await vid.play();
+    Object.assign(S,{kind:'file',mirror:false,label:'clip · '+file.name}); watchFrames();
+  }
+}
+function useSynth(){ stopStream(); Object.assign(S,{kind:'synth',mirror:false,label:'synthetic scene'}); }
+function srcDims(){ if(S.kind==='img') return [img.naturalWidth||1,img.naturalHeight||1]; return [vid.videoWidth||1,vid.videoHeight||1]; }
+
+/* ------------------------------ sound ------------------------------ */
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const CHORDS=[
+  {name:'D maj9',  notes:[50,54,57,61,64], hue:0/6},
+  {name:'G lyd/D', notes:[50,55,59,61,66], hue:1/6},
+  {name:'B m9',    notes:[47,50,54,57,61], hue:2/6},
+  {name:'E m9',    notes:[52,55,59,62,66], hue:3/6},
+  {name:'A sus2',  notes:[45,52,57,59,64], hue:4/6},
+  {name:'F♯ m7',   notes:[42,54,57,61,64], hue:5/6},
+];
+const NEUTRAL={name:'D sus2',notes:[50,52,57,62,64],hue:-1};
+
+class Sonic{
+  constructor(){ this.ctx=null; this.on=true; this.chord=NEUTRAL; this.voices=0; this.arpT=null; }
+  start(){
+    if(this.ctx){ this.ctx.resume(); return; }
+    const C=this.ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+    const g=v=>{const n=C.createGain(); n.gain.value=v; return n;};
+    this.g=g;
+    this.out=g(0);
+    const comp=C.createDynamicsCompressor(); comp.threshold.value=-16; comp.knee.value=10; comp.ratio.value=8; comp.attack.value=.003; comp.release.value=.25;
+    this.out.connect(comp).connect(C.destination);
+    this.scope=C.createAnalyser(); this.scope.fftSize=512; comp.connect(this.scope); this.scopeBuf=new Uint8Array(512);
+    this.out.gain.setTargetAtTime(this.on?.85:0,C.currentTime,.6);
+    this.bus=g(1); this.bus.connect(this.out);
+    this.verb=C.createConvolver(); this.verb.buffer=this.ir(4.5); this.verbSend=g(.38); const vr=g(.9);
+    this.verbSend.connect(this.verb).connect(vr).connect(this.out);
+    this.dly=C.createDelay(2); this.dly.delayTime.value=.375; this.fbk=g(.42); this.dlySend=g(.1);
+    const dlp=C.createBiquadFilter(); dlp.type='lowpass'; dlp.frequency.value=2400;
+    this.dlySend.connect(this.dly); this.dly.connect(dlp); dlp.connect(this.fbk).connect(this.dly); dlp.connect(this.out); dlp.connect(this.verbSend);
+    // noise
+    const nb=C.createBuffer(1,C.sampleRate*3,C.sampleRate), nd=nb.getChannelData(0);
+    for(let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1; this.noiseBuf=nb;
+    // drone: three detuned saw pairs through a lowpass that opens with brightness, plus a sine sub
+    this.droneF=C.createBiquadFilter(); this.droneF.type='lowpass'; this.droneF.frequency.value=300; this.droneF.Q.value=.9;
+    this.droneG=g(0); this.droneF.connect(this.droneG); this.droneG.connect(this.bus); this.droneG.connect(this.verbSend);
+    this.dv=[];
+    for(let k=0;k<3;k++){ const pair=[]; for(const det of [-7,7]){ const o=C.createOscillator(); o.type='sawtooth'; o.detune.value=det+(Math.random()-.5)*4; const og=g(.045); o.connect(og).connect(this.droneF); o.start(); pair.push(o);} this.dv.push(pair); }
+    this.sub=C.createOscillator(); this.sub.type='sine'; const sg=g(.16); this.sub.connect(sg).connect(this.droneG); this.sub.start();
+    // air: band-passed noise that follows where the motion is
+    const an=C.createBufferSource(); an.buffer=nb; an.loop=true;
+    this.airF=C.createBiquadFilter(); this.airF.type='bandpass'; this.airF.frequency.value=900; this.airF.Q.value=1.4;
+    this.airG=g(0); this.airP=C.createStereoPanner();
+    an.connect(this.airF).connect(this.airG).connect(this.airP); this.airP.connect(this.bus); this.airP.connect(this.verbSend); an.start();
+    this.setChord(this.chord,true);
+    this.setMode(MODES[mode].snd);
+  }
+  ir(sec){ const C=this.ctx, n=Math.floor(C.sampleRate*sec), b=C.createBuffer(2,n,C.sampleRate);
+    for(let ch=0;ch<2;ch++){ const d=b.getChannelData(ch); let lp=0; for(let i=0;i<n;i++){ lp=lp*.6+(Math.random()*2-1)*.4; d[i]=lp*Math.pow(1-i/n,2.6)*(i<C.sampleRate*.012?i/(C.sampleRate*.012):1); } }
+    return b; }
+  setMuted(m){ this.on=!m; if(this.ctx) this.out.gain.setTargetAtTime(m?0:.85,this.ctx.currentTime,.15); }
+  setMode(s){ this.snd=s; if(!this.ctx) return; const t=this.ctx.currentTime;
+    this.verbSend.gain.setTargetAtTime(s.rev,t,.4); this.dlySend.gain.setTargetAtTime(s.dly,t,.4); }
+  setChord(ch,now=false){
+    this.chord=ch; if(!this.ctx) return; const t=this.ctx.currentTime, tc=now?.01:1.1;
+    const n=ch.notes, fr=[n[0],n[2],n[3]].map(mtof);
+    this.dv.forEach((pair,k)=>pair.forEach(o=>o.frequency.setTargetAtTime(fr[k],t,tc)));
+    this.sub.frequency.setTargetAtTime(mtof(n[0]-12),t,tc);
+  }
+  scale(lo=62,hi=93){ const pcs=new Set(this.chord.notes.map(n=>n%12)); const out=[]; for(let m=lo;m<=hi;m++) if(pcs.has(m%12)) out.push(m); return out; }
+  update(bright,motion,mx,my){
+    if(!this.ctx) return; const t=this.ctx.currentTime;
+    this.droneF.frequency.setTargetAtTime(110+Math.pow(bright,1.4)*3200,t,.35);
+    this.droneG.gain.setTargetAtTime(.09+.13*bright,t,.6);
+    this.airG.gain.setTargetAtTime(Math.min(.32,motion*2.6),t,.15);
+    this.airF.frequency.setTargetAtTime(260+my*3800,t,.2);
+    this.airP.pan.setTargetAtTime(Math.max(-1,Math.min(1,mx*2-1)),t,.2);
+  }
+  bell(m,vel,pan,when=0,dec){
+    if(!this.ctx||this.voices>26) return; const C=this.ctx, s=this.snd, t=C.currentTime+.012+when, f=mtof(m), D=dec||s.dec;
+    const car=C.createOscillator(), mod=C.createOscillator(), mg=C.createGain(), env=C.createGain(), p=C.createStereoPanner();
+    car.frequency.setValueAtTime(f,t); if(s.glide!==1) car.frequency.exponentialRampToValueAtTime(f*s.glide,t+D);
+    mod.frequency.value=f*s.ratio;
+    mg.gain.setValueAtTime(f*s.idx*(.4+vel),t); mg.gain.exponentialRampToValueAtTime(f*.02+1,t+D*.6);
+    env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(.16*vel,t+.004); env.gain.exponentialRampToValueAtTime(.0001,t+D);
+    p.pan.value=Math.max(-1,Math.min(1,pan));
+    mod.connect(mg).connect(car.frequency); car.connect(env).connect(p);
+    p.connect(this.bus); p.connect(this.verbSend); p.connect(this.dlySend);
+    car.start(t); mod.start(t); car.stop(t+D+.05); mod.stop(t+D+.05);
+    this.voices++; car.onended=()=>{this.voices--;};
+  }
+  whoosh(pans,gains,freqs,dur){
+    if(!this.ctx) return; const C=this.ctx, t=C.currentTime+.01;
+    const n=C.createBufferSource(); n.buffer=this.noiseBuf; n.loop=true;
+    const f=C.createBiquadFilter(); f.type='bandpass'; f.Q.value=2.2; const gg=C.createGain(); const p=C.createStereoPanner();
+    f.frequency.setValueCurveAtTime(freqs,t,dur); gg.gain.setValueCurveAtTime(gains,t,dur); p.pan.setValueCurveAtTime(pans,t,dur);
+    n.connect(f).connect(gg).connect(p); p.connect(this.bus); p.connect(this.verbSend);
+    n.start(t); n.stop(t+dur+.05);
+  }
+  bloom(ch,pan){
+    if(!this.ctx) return; const C=this.ctx, t=C.currentTime+.02;
+    const lp=C.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(400,t); lp.frequency.exponentialRampToValueAtTime(3200,t+.6); lp.frequency.exponentialRampToValueAtTime(600,t+6);
+    const p=C.createStereoPanner(); p.pan.value=pan*.6; lp.connect(p); p.connect(this.bus); p.connect(this.verbSend);
+    ch.notes.forEach((m,i)=>{ for(const det of [-5,5]){ const o=C.createOscillator(); o.type='triangle'; o.frequency.value=mtof(m+12); o.detune.value=det;
+      const e=C.createGain(); e.gain.setValueAtTime(0,t); e.gain.linearRampToValueAtTime(.05,t+.08+i*.03); e.gain.exponentialRampToValueAtTime(.0001,t+6.5);
+      o.connect(e).connect(lp); o.start(t); o.stop(t+6.6);} });
+    const s=C.createOscillator(); s.type='sine'; s.frequency.setValueAtTime(70,t); s.frequency.exponentialRampToValueAtTime(34,t+.5);
+    const se=C.createGain(); se.gain.setValueAtTime(.5,t); se.gain.exponentialRampToValueAtTime(.0001,t+.7); s.connect(se).connect(this.bus); s.start(t); s.stop(t+.8);
+    const sc=this.scale(74,98); for(let i=0;i<6;i++) this.bell(sc[(i*2)%sc.length],.35,pan+(Math.random()-.5)*.6,.12+i*.09,2.6);
+  }
+  motif(pan){ const sc=this.scale(69,93); const k=Math.floor(Math.random()*(sc.length-4)); [0,1,3].forEach((d,i)=>this.bell(sc[k+d],.55,pan,i*.085,1.4)); }
+  arpStart(){ if(!this.ctx||this.arpT) return; let step=0, next=this.ctx.currentTime+.05; const T=.115;
+    this.arpT=setInterval(()=>{ const sc=this.scale(62,93); while(next<this.ctx.currentTime+.12){
+      const n=sc.length, i=step%(2*n-2), idx=i<n?i:2*n-2-i;
+      this.bell(sc[idx],.42,Math.sin(step*.45),next-this.ctx.currentTime,.9); step++; next+=T; } },30); }
+  arpStop(){ clearInterval(this.arpT); this.arpT=null; }
+}
+const snd=new Sonic();
+
+/* ------------------------------ analysis -> events ------------------------------ */
+const A={
+  n:0, base:null, cool:null, tokens:2, bright:.3, motion:0, mx:.5, my:.5, hueX:0, hueY:0, last:null,
+  chordCand:-1, candSince:0, chordHold:0, cometNext:4,
+  reset(n){ this.n=n; this.base=new Float32Array(n); this.cool=new Float32Array(n); this.last=null; }
+};
+function rgbHsv(r,g,b){ const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn; let h=0;
+  if(d>1e-5){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h/=6; if(h<0) h+=1; }
+  return [h, mx>0?d/mx:0, mx]; }
+
+function analyse(buf){
+  const {GX,GY}=R, n=GX*GY, cells=new Array(n);
+  let sb=0, sm=0, smx=0, smy=0, hx=0, hy=0, best=-1, bestS=0;
+  for(let i=0;i<n;i++){
+    const r=buf[i*4]/255, g=buf[i*4+1]/255, b=buf[i*4+2]/255, m=buf[i*4+3]/255;
+    const L=.2126*r+.7152*g+.0722*b, [h,s,v]=rgbHsv(r,g,b);
+    const x=((i%GX)+.5)/GX, y=(Math.floor(i/GX)+.5)/GY;
+    cells[i]={r,g,b,m,L,h,s,x,y};
+    sb+=L; sm+=m; smx+=m*x; smy+=m*y;
+    const wgt=s*v; hx+=Math.cos(h*6.2832)*wgt; hy+=Math.sin(h*6.2832)*wgt;
+  }
+  const bright=sb/n, motion=sm/n;
+  A.bright+=(bright-A.bright)*.15; A.motion+=(motion-A.motion)*.2;
+  if(sm>1e-4){ A.mx+=(smx/sm-A.mx)*.2; A.my+=(smy/sm-A.my)*.2; }
+  A.hueX=A.hueX*.95+hx/n*.05; A.hueY=A.hueY*.95+hy/n*.05;
+  A.last=cells;
+  for(let i=0;i<n;i++){ const c=cells[i]; const sc=Math.pow(c.L,3)*(.35+c.m*5)*(.5+c.s); if(c.L>A.bright+.22 && sc>bestS){ bestS=sc; best=i; } }
+  return {cells,best,bestS};
+}
+
+function events(res,dt){
+  const {cells}=res, n=cells.length;
+  A.tokens=Math.min(4,A.tokens+dt*(1.2+A.motion*28));
+  const cand=[];
+  for(let i=0;i<n;i++){ const c=cells[i]; const d=c.m-A.base[i]; A.base[i]+=(c.m-A.base[i])*.08;
+    if(d>.11 && T>A.cool[i]) cand.push([d,i]); }
+  cand.sort((a,b)=>b[0]-a[0]);
+  const sc=snd.scale();
+  for(const [d,i] of cand){
+    if(A.tokens<1) break; A.tokens-=1;
+    const c=cells[i]; const {GX}=R;
+    A.cool[i]=T+.35; for(const j of [i-1,i+1,i-GX,i+GX]) if(j>=0&&j<n) A.cool[j]=T+.2;
+    const idx=Math.min(sc.length-1,Math.floor(c.y*sc.length));
+    const vel=Math.min(1,.25+d*2.2);
+    snd.bell(sc[idx],vel,c.x*2-1);
+    V.pulse=Math.min(1.2,V.pulse+vel*.35);
+    const col=hsvRgb(c.h,Math.max(.5,c.s),1);
+    sparks.push({x:c.x,y:c.y,col,t:0,life:.9,max:46*vel,kind:1});
+  }
+  // harmony follows the dominant colour (slowly), unless a comet just landed
+  const hs=Math.hypot(A.hueX,A.hueY);
+  let sec=-1; if(hs>.035){ let h=Math.atan2(A.hueY,A.hueX)/6.2832; if(h<0) h+=1; sec=Math.round(h*6)%6; }
+  if(sec!==A.chordCand){ A.chordCand=sec; A.candSince=T; }
+  const want=sec<0?NEUTRAL:CHORDS[sec];
+  if(want!==snd.chord && T-A.candSince>1.6 && T>A.chordHold){ setChord(want); A.chordHold=T+4; }
+  // a shiny thing breaks away as a comet
+  if(res.best>=0 && res.bestS>.12 && T>A.cometNext && comets.length<3){
+    const c=cells[res.best]; spawnComet(c.x,c.y,c.h,Math.max(.6,c.s)); A.cometNext=T+4+Math.random()*5;
+  }
+}
+function setChord(ch){ snd.setChord(ch); const sw=$('#chord i'); sw.style.background=ch.hue<0?'#9aa3b8':`hsl(${ch.hue*360},90%,62%)`; $('#chord span').textContent=ch.name; }
+function hsvRgb(h,s,v){ const f=n=>{const k=(n+h*6)%6; return v-v*s*Math.max(0,Math.min(k,4-k,1));}; return [f(5),f(3),f(1)]; }
+
+/* ------------------------------ comets & sparks ------------------------------ */
+const comets=[], sparks=[];
+const bez=(p,u)=>{ const a=1-u; return [0,1].map(k=>a*a*a*p[0][k]+3*a*a*u*p[1][k]+3*a*u*u*p[2][k]+u*u*u*p[3][k]); };
+function spawnComet(x,y,hue,sat){
+  const ang=Math.atan2(y-.5,x-.5)+(Math.random()-.5)*1.4;
+  const p0=[x,y], p1=[x+Math.cos(ang)*.75,y+Math.sin(ang)*.75];
+  let p3, tries=0; do{ p3=[.15+Math.random()*.7,.15+Math.random()*.7]; }while(Math.hypot(p3[0]-x,p3[1]-y)<.38 && ++tries<20);
+  const sw=ang+(Math.random()<.5?1:-1)*2.3; const p2=[p3[0]+Math.cos(sw)*.65,p3[1]+Math.sin(sw)*.65];
+  const p=[p0,p1,p2,p3], dur=2.6+Math.random()*1.6;
+  const sector=Math.round(hue*6)%6;
+  const col=hsvRgb(hue,sat,1);
+  comets.push({p,t:0,dur,col,sector,trail:[],landed:false});
+  sparks.push({x,y,col,t:0,life:.8,max:120,kind:1});
+  V.glitch=Math.max(V.glitch,.35);
+  // sound: a little motif where it breaks away, then a whoosh that follows its flight
+  snd.motif(x*2-1);
+  const K=48, pans=new Float32Array(K), gains=new Float32Array(K), freqs=new Float32Array(K);
+  for(let i=0;i<K;i++){ const u=i/(K-1), a=bez(p,Math.max(0,u-.01)), b=bez(p,Math.min(1,u+.01));
+    const spd=Math.hypot(b[0]-a[0],b[1]-a[1])/.02/dur;
+    pans[i]=Math.max(-1,Math.min(1,bez(p,u)[0]*2-1)); freqs[i]=300+Math.min(1,spd/1.2)*2600; gains[i]=Math.min(.22,spd*.12)*Math.sin(Math.PI*u)**.5; }
+  snd.whoosh(pans,gains,freqs,dur);
+}
+function landComet(c){
+  c.landed=true; const [x,y]=c.p[3];
+  V.tint=c.col; V.tintAmt=1; V.glitch=Math.max(V.glitch,.6); V.pulse=1.2;
+  sparks.push({x,y,col:c.col,t:0,life:1.6,max:300,kind:1},{x,y,col:c.col,t:0,life:.9,max:150,kind:1});
+  const ch=CHORDS[c.sector]; setChord(ch); A.chordHold=T+7; A.chordCand=c.sector; A.candSince=T;
+  snd.bloom(ch,x*2-1);
+}
+function updateComets(dt){
+  for(let i=comets.length-1;i>=0;i--){ const c=comets[i];
+    if(!c.landed){ c.t+=dt; const u=Math.min(1,c.t/c.dur); c.trail.push(bez(c.p,u)); if(c.trail.length>28) c.trail.shift(); if(u>=1) landComet(c); }
+    else { c.trail.splice(0,2); if(c.trail.length<2) comets.splice(i,1); } }
+  for(let i=sparks.length-1;i>=0;i--){ sparks[i].t+=dt; if(sparks[i].t>sparks[i].life) sparks.splice(i,1); }
+}
+function drawOverlay(){
+  const k=H/900; let nv=0; const strips=[];
+  for(const c of comets){ const tr=c.trail, n=tr.length; if(n<2) continue; const start=nv;
+    for(let j=0;j<n&&nv<RIB_MAX-2;j++){ const a=tr[Math.max(0,j-1)], b=tr[Math.min(n-1,j+1)];
+      let tx=(b[0]-a[0])*W, ty=(b[1]-a[1])*H; const l=Math.hypot(tx,ty)||1; tx/=l; ty/=l;
+      const f=j/(n-1), w=(1.5+13*Math.pow(f,1.5))*k, I=Math.pow(f,1.4)*(c.landed?.7:1);
+      for(const s of [-1,1]){ const o=nv*7; ribData[o]=tr[j][0]+(-ty*w*s)/W; ribData[o+1]=tr[j][1]+(tx*w*s)/H;
+        ribData[o+2]=c.col[0]; ribData[o+3]=c.col[1]; ribData[o+4]=c.col[2]; ribData[o+5]=s; ribData[o+6]=I; nv++; } }
+    strips.push([start,nv-start]); }
+  let np=0; const maxPt=PT_RANGE[1]||64;
+  for(const c of comets){ if(c.landed||!c.trail.length||np>=PT_MAX) continue; const h=c.trail[c.trail.length-1], o=np*8;
+    ptData.set([h[0],h[1],Math.min(maxPt,46*k*(1+V.pulse*.3)),...c.col,0,1],o); np++; }
+  for(const s of sparks){ if(np>=PT_MAX) break; const u=s.t/s.life, o=np*8;
+    ptData.set([s.x,s.y,Math.min(maxPt,(8+Math.sqrt(u)*s.max)*k*2),...s.col,s.kind,Math.pow(1-u,2)],o); np++; }
+  if(!nv&&!np) return;
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  if(nv){ gl.useProgram(progs.rib); gl.bindVertexArray(ribVao); gl.bindBuffer(gl.ARRAY_BUFFER,ribBuf); gl.bufferSubData(gl.ARRAY_BUFFER,0,ribData,0,nv*7);
+    for(const [s,c] of strips) gl.drawArrays(gl.TRIANGLE_STRIP,s,c); }
+  if(np){ gl.useProgram(progs.pt); gl.bindVertexArray(ptVao); gl.bindBuffer(gl.ARRAY_BUFFER,ptBuf); gl.bufferSubData(gl.ARRAY_BUFFER,0,ptData,0,np*8); gl.drawArrays(gl.POINTS,0,np); }
+  gl.disable(gl.BLEND); gl.bindVertexArray(emptyVao);
+}
+
+/* ------------------------------ frame ------------------------------ */
+let mode=0, T=0, started=false;
+const params=MODES.map(()=>.5);
+const V={pulse:0,glitch:0,tint:[1,1,1],tintAmt:0,focus:0,focusT:0,focusHue:0};
+
+function bind(unit,tex,target=gl.TEXTURE_2D){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(target,tex); }
+function common(p){
+  gl.uniform2f(U(p,'uRes'),W,H); gl.uniform1f(U(p,'uTime'),T); gl.uniform1f(U(p,'uParam'),params[mode]);
+  gl.uniform1f(U(p,'uBright'),A.bright); gl.uniform1f(U(p,'uMotion'),A.motion); gl.uniform1f(U(p,'uPulse'),V.pulse);
+  gl.uniform1i(U(p,'uHead'),R.head); gl.uniform1i(U(p,'uHistN'),HISTN);
+}
+function pass(p,f,w,h){ gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.viewport(0,0,w,h); gl.useProgram(p); common(p); }
+
+function render(){
+  gl.bindVertexArray(emptyVao);
+  // 1. source
+  const live=(S.kind==='cam'||S.kind==='file');
+  if(live && vid.readyState>=2 && (S.newFrame||!vid.requestVideoFrameCallback)){
+    bind(4,vidTex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,vid); S.newFrame=true;
+  } else if(live) S.newFrame=false;
+  if(S.kind==='synth'||S.kind==='img') S.newFrame=true;
+  if(S.newFrame){
+    S.newFrame=false; R.si^=1;
+    const p=progs.src; pass(p,R.srcF[R.si],W,H); bind(4,vidTex);
+    const synth=S.kind==='synth'||(S.kind==='img'&&!S.imgReady)||(live&&vid.readyState<2);
+    gl.uniform1i(U(p,'uSynth'),synth?1:0);
+    const [vw,vh]=srcDims(), va=vw/vh, sa=W/H;
+    gl.uniform2f(U(p,'uScale'),va>sa?sa/va:1,va>sa?1:va/sa);
+    gl.uniform1f(U(p,'uMirror'),S.mirror?1:0);
+    if(S.kind==='img') gl.uniform3f(U(p,'uDrift'),1.12+.08*Math.sin(T*.11),.03*Math.sin(T*.07),.03*Math.cos(T*.09));
+    else gl.uniform3f(U(p,'uDrift'),1,0,0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    // history ring
+    R.head=(R.head+1)%HISTN;
+    gl.bindFramebuffer(gl.FRAMEBUFFER,R.histF); gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,R.hist,0,R.head);
+    gl.viewport(0,0,R.hw,R.hh); gl.useProgram(progs.copy); bind(0,R.src[R.si]); gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+  const cur=R.src[R.si], prev=R.src[R.si^1];
+  const skipRead=R.justRead; R.justRead=false;
+  // 2. effect
+  const fp=progs.fx[mode], nf=R.fi^1;
+  pass(fp,R.fbF[nf],W,H); bind(0,cur); bind(1,prev); bind(2,R.fb[R.fi]); bind(3,R.hist,gl.TEXTURE_2D_ARRAY);
+  gl.drawArrays(gl.TRIANGLES,0,3); R.fi=nf;
+  // 3. analysis of what we just made
+  if(!R.fence && !skipRead){
+    const p=progs.ana; pass(p,R.anaF,R.GX,R.GY); gl.uniform2f(U(p,'uGrid'),R.GX,R.GY);
+    bind(0,cur); bind(1,prev); bind(2,R.fb[R.fi]); gl.drawArrays(gl.TRIANGLES,0,3);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER,R.pbo); gl.readPixels(0,0,R.GX,R.GY,gl.RGBA,gl.UNSIGNED_BYTE,0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+    R.fence=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0);
+  }
+  // 4. comets & sparks into the feedback buffer
+  gl.bindFramebuffer(gl.FRAMEBUFFER,R.fbF[R.fi]); gl.viewport(0,0,W,H); drawOverlay();
+  // 5. to screen
+  const op=progs.out; pass(op,null,W,H); bind(2,R.fb[R.fi]);
+  gl.uniform1f(U(op,'uFocus'),V.focus); gl.uniform1f(U(op,'uFocusHue'),V.focusHue);
+  gl.uniform3f(U(op,'uTint'),...V.tint); gl.uniform1f(U(op,'uTintAmt'),V.tintAmt); gl.uniform1f(U(op,'uGlitch'),V.glitch);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+function pollAnalysis(dt){
+  if(!R.fence) return;
+  const st=gl.clientWaitSync(R.fence,0,0);
+  if(st===gl.TIMEOUT_EXPIRED) return;
+  gl.deleteSync(R.fence); R.fence=null; R.justRead=true;
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,R.pbo); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,R.anaBuf); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  const res=analyse(R.anaBuf);
+  if(started){ events(res,dt); snd.update(A.bright,A.motion,A.mx,A.my); }
+}
+
+const scopeC=$('#scope').getContext('2d');
+function drawScope(){
+  const w=280,h=56; scopeC.clearRect(0,0,w,h); if(!snd.ctx) return;
+  snd.scope.getByteTimeDomainData(snd.scopeBuf); const b=snd.scopeBuf;
+  scopeC.strokeStyle='rgba(124,243,255,.9)'; scopeC.lineWidth=2; scopeC.beginPath();
+  for(let i=0;i<b.length;i+=2){ const x=i/(b.length-1)*w, y=h/2+(b[i]-128)/128*h*.9; i?scopeC.lineTo(x,y):scopeC.moveTo(x,y); }
+  scopeC.stroke();
+}
+
+let lastNow=performance.now(), lastPoll=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.1,(now-lastNow)/1000); lastNow=now; T+=dt;
+  if(R.fence){ const pdt=(now-lastPoll)/1000; const had=R.fence; pollAnalysis(Math.min(.2,pdt)); if(!R.fence&&had) lastPoll=now; }
+  V.pulse*=Math.exp(-dt*5); V.glitch*=Math.exp(-dt*3.5); V.tintAmt*=Math.exp(-dt/12);
+  V.focus+=(V.focusT-V.focus)*Math.min(1,dt*5);
+  updateComets(dt);
+  render();
+  if(started && !hudHidden) drawScope();
+}
+
+/* ------------------------------ UI ------------------------------ */
+const hud=$('#hud'); let hudHidden=false;
+const dots=$('#dots'); MODES.forEach(()=>dots.appendChild(document.createElement('i')));
+function showMode(toast=true){
+  $('#mname').innerHTML=MODES[mode].name+'<small>'+MODES[mode].blurb+'</small>';
+  [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===mode));
+  if(toast){ const t=$('#toast'); t.querySelector('b').textContent=MODES[mode].name; t.querySelector('span').textContent=MODES[mode].blurb;
+    t.classList.add('show'); clearTimeout(showMode.tm); showMode.tm=setTimeout(()=>t.classList.remove('show'),1100); }
+}
+function setMode(m){ mode=(m+MODES.length)%MODES.length; snd.setMode(MODES[mode].snd); V.glitch=Math.max(V.glitch,.5); showMode(); }
+function showParam(){ const p=$('#param'); p.querySelector('i').style.height=(params[mode]*100)+'%'; p.classList.add('show'); clearTimeout(showParam.tm); showParam.tm=setTimeout(()=>p.classList.remove('show'),900); }
+function setHud(hidden){ hudHidden=hidden; hud.classList.toggle('off',hidden); }
+function note(msg){ $('#note').textContent=msg||''; }
+
+async function go(kind,file){
+  try{
+    if(kind==='cam') await useCamera(S.facing==='user'?'user':'environment');
+    else if(kind==='file') await useFile(file);
+    else useSynth();
+  }catch(e){
+    console.warn(e);
+    const why=(e&&(e.name||e.message))||String(e);
+    note(kind==='cam'
+      ? (IN_APP ? 'Couldn’t open the camera ('+why+'). Check the app has camera permission in Android settings.'
+                : 'The live camera is blocked here ('+why+'). In the Claude viewer use the Android app instead; in a browser it needs https or localhost.')
+      : 'Couldn’t open that file: '+why);
+    return;
+  }
+  snd.start(); started=true; note('');
+  $('#start').classList.add('gone'); setHud(false); showMode();
+  $('#srcl').textContent=S.label; $('#bFlip').style.display=S.kind==='cam'?'':'none';
+  try{ if(!document.fullscreenElement) await document.documentElement.requestFullscreen({navigationUI:'hide'}); }catch(e){}
+  try{ await navigator.wakeLock?.request('screen'); }catch(e){}
+}
+$('#bCam').onclick=()=>go('cam');
+$('#bSyn').onclick=()=>go('synth');
+for(const id of ['#fRec','#fPick']) $(id).onchange=e=>{ const f=e.target.files[0]; if(f) go('file',f); e.target.value=''; };
+$('#bSrc').onclick=e=>{ e.stopPropagation(); $('#start').classList.remove('gone'); setHud(true); };
+$('#bMute').onclick=e=>{ e.stopPropagation(); toggleMute(); };
+$('#bFs').onclick=e=>{ e.stopPropagation(); toggleFs(); };
+$('#bFlip').onclick=e=>{ e.stopPropagation(); flip(); };
+function toggleMute(){ snd.setMuted(snd.on); $('#bMute').classList.toggle('muted',!snd.on); $('#wav').style.display=snd.on?'':'none'; }
+function toggleFs(){ try{ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{}); }catch(e){} }
+async function flip(){ if(S.kind!=='cam') return; try{ await useCamera(S.facing==='user'?'environment':'user'); $('#srcl').textContent=S.label; V.glitch=.8; }catch(e){} }
+
+/* gestures on the canvas */
+let ptr=null, lastTap=0, tapTm=null;
+function cellAt(x,y){ if(!A.last) return null; const gx=Math.min(R.GX-1,Math.floor(x*R.GX)), gy=Math.min(R.GY-1,Math.floor(y*R.GY)); return A.last[gy*R.GX+gx]; }
+function focusStart(x,y){
+  const c=cellAt(x,y); let h=c&&c.s>.2?c.h:(Math.atan2(A.hueY,A.hueX)/6.2832+1)%1;
+  V.focusHue=h; V.focusT=1; snd.arpStart();
+  sparks.push({x,y,col:hsvRgb(h,.8,1),t:0,life:1,max:180,kind:1});
+}
+function focusEnd(){ V.focusT=0; snd.arpStop(); }
+cv.addEventListener('pointerdown',e=>{
+  if(!started) return;
+  cv.setPointerCapture(e.pointerId);
+  ptr={id:e.pointerId,x0:e.clientX,y0:e.clientY,p0:params[mode],t0:performance.now(),moved:false,focus:false,mode:null};
+  ptr.lp=setTimeout(()=>{ if(ptr&&!ptr.moved){ ptr.focus=true; focusStart(e.clientX/innerWidth,1-e.clientY/innerHeight); } },420);
+});
+cv.addEventListener('pointermove',e=>{
+  if(!ptr||e.pointerId!==ptr.id) return;
+  const dx=e.clientX-ptr.x0, dy=e.clientY-ptr.y0;
+  if(!ptr.moved && Math.hypot(dx,dy)>14){ ptr.moved=true; clearTimeout(ptr.lp); ptr.mode=Math.abs(dy)>Math.abs(dx)?'v':'h'; }
+  if(ptr.mode==='v' && !ptr.focus){ params[mode]=Math.max(0,Math.min(1,ptr.p0-dy/(innerHeight*.6))); showParam(); }
+});
+function endPtr(e){
+  if(!ptr||e.pointerId!==ptr.id) return; clearTimeout(ptr.lp);
+  const dx=e.clientX-ptr.x0, dt=performance.now()-ptr.t0;
+  if(ptr.focus) focusEnd();
+  else if(ptr.mode==='h' && Math.abs(dx)>50) setMode(mode+(dx<0?1:-1));
+  else if(!ptr.moved && dt<350){
+    const now=performance.now();
+    if(now-lastTap<300){ clearTimeout(tapTm); lastTap=0; flip(); }
+    else { lastTap=now; tapTm=setTimeout(()=>setHud(!hudHidden),300); }
+  }
+  ptr=null;
+}
+cv.addEventListener('pointerup',endPtr); cv.addEventListener('pointercancel',endPtr);
+addEventListener('keydown',e=>{
+  if(!started||e.repeat&&e.key!=='ArrowUp'&&e.key!=='ArrowDown') return;
+  const k=e.key;
+  if(k==='ArrowRight') setMode(mode+1); else if(k==='ArrowLeft') setMode(mode-1);
+  else if(k==='ArrowUp'||k==='ArrowDown'){ params[mode]=Math.max(0,Math.min(1,params[mode]+(k==='ArrowUp'?.04:-.04))); showParam(); }
+  else if(k>='1'&&k<=String(MODES.length)) setMode(+k-1);
+  else if(k===' '){ e.preventDefault(); focusStart(.5,.5); }
+  else if(k==='f'||k==='F') toggleFs(); else if(k==='m'||k==='M') toggleMute();
+  else if(k==='h'||k==='H') setHud(!hudHidden); else if(k==='c'||k==='C') flip();
+});
+addEventListener('keyup',e=>{ if(e.key===' '&&started) focusEnd(); });
+document.addEventListener('visibilitychange',()=>{ if(!snd.ctx) return; document.hidden?snd.ctx.suspend():snd.ctx.resume(); });
+addEventListener('resize',()=>resize());
+
+resize(); showMode(false); setChord(NEUTRAL);
+requestAnimationFrame(frame);
+// test hook (harmless in normal use)
+window.__AD={setMode,go,get mode(){return mode},A,V,comets,spawnComet};
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - run: gradle assembleDebug
+      - run: cp app/build/outputs/apk/debug/app-debug.apk ad-live.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: ad-live-apk, path: ad-live.apk }
+      - name: Publish as the "latest" release (direct APK download for the phone)
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest ad-live.apk --prerelease --title "AD Live — latest build" --notes "Built from ${GITHUB_SHA::7}, run ${GITHUB_RUN_NUMBER}."

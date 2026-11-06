@@ -1,0 +1,21 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'io.b8z.adlive'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'io.b8z.adlive'
+        minSdk 26
+        targetSdk 35
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName '0.1'
+    }
+    signingConfigs {
+        // A fixed debug key committed with the project, so every build installs over the last one.
+        fixed { storeFile file('../keystore/debug.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.fixed }
+        release { signingConfig signingConfigs.fixed; minifyEnabled false }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
