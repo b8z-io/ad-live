@@ -14,6 +14,8 @@ jobs:
         with: { distribution: temurin, java-version: '21' }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.14.3' }
+      - name: Fetch the NDI SDK for Android (not stored in this repo)
+        run: ./tools/fetch_ndi_sdk.sh
       - run: gradle assembleDebug
       - run: cp app/build/outputs/apk/debug/app-debug.apk ad-live.apk
       - uses: actions/upload-artifact@v4

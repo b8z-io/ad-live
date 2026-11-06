@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.webkit.JavascriptInterface;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -45,6 +47,8 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingPermission;
     private ValueCallback<Uri[]> fileCallback;
     private WebChromeClient.FileChooserParams fileParams;
+    private FrameBridge bridge;
+    private WifiManager.MulticastLock multicast;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,8 +66,22 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); // ws://127.0.0.1 from the https page
+
+        if (Ndi.AVAILABLE) {
+            try { bridge = new FrameBridge(); } catch (IOException e) { Log.e(TAG, "bridge", e); }
+        }
+        web.addJavascriptInterface(new NativeApi(), "ADNative");
 
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
+                Uri u = req.getUrl();
+                if (HOST.equals(u.getHost())) return false;
+                try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (ActivityNotFoundException ignored) {}
+                return true; // external links open in the browser, never inside the app
+            }
+
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
@@ -174,7 +192,44 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() { super.onResume(); web.onResume(); immersive(); }
     @Override protected void onPause() { web.onPause(); super.onPause(); }
-    @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() {
+        if (Ndi.AVAILABLE) Ndi.stop();
+        releaseMulticast();
+        if (bridge != null) bridge.close();
+        web.destroy();
+        super.onDestroy();
+    }
+
+    private void acquireMulticast() {
+        if (multicast != null) return;
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        if (wm == null) return;
+        multicast = wm.createMulticastLock("ad-live-ndi");
+        multicast.setReferenceCounted(false);
+        multicast.acquire(); // mDNS: lets receivers discover this NDI source
+    }
+
+    private void releaseMulticast() { if (multicast != null) { multicast.release(); multicast = null; } }
+
+    /** Called from the page as window.ADNative.* (runs on a binder thread). */
+    private final class NativeApi {
+        @JavascriptInterface public boolean ndiAvailable() { return Ndi.AVAILABLE && bridge != null; }
+        @JavascriptInterface public int ndiPort() { return bridge != null ? bridge.port() : -1; }
+        @JavascriptInterface public String ndiVersion() { return Ndi.AVAILABLE ? Ndi.version() : ""; }
+        @JavascriptInterface public boolean ndiStart(String name) {
+            if (!ndiAvailable()) return false;
+            runOnUiThread(MainActivity.this::acquireMulticast);
+            return Ndi.start(name);
+        }
+        @JavascriptInterface public void ndiStop() {
+            if (Ndi.AVAILABLE) Ndi.stop();
+            runOnUiThread(MainActivity.this::releaseMulticast);
+        }
+        @JavascriptInterface public int ndiConnections() { return Ndi.AVAILABLE ? Ndi.connections() : -1; }
+        @JavascriptInterface public String ndiStats() {
+            return bridge == null ? "{}" : "{\"video\":" + bridge.videoFrames + ",\"audio\":" + bridge.audioFrames + "}";
+        }
+    }
 
     private static String mime(String path) {
         if (path.endsWith(".html")) return "text/html";

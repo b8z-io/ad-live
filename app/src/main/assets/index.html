@@ -68,6 +68,23 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #param{position:fixed;right:calc(10px + env(safe-area-inset-right));top:30%;height:40%;width:4px;border-radius:2px;background:rgba(255,255,255,.15);z-index:4;opacity:0;transition:opacity .4s;pointer-events:none}
 #param.show{opacity:1}
 #param i{position:absolute;left:0;right:0;bottom:0;border-radius:2px;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+#bNdi{width:auto;padding:0 12px;border-radius:22px;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;gap:6px;display:none;grid-auto-flow:column}
+#bNdi i{width:7px;height:7px;border-radius:50%;background:#59607a}
+#bNdi.on i{background:#ff3b3b;box-shadow:0 0 8px #ff3b3b;animation:blink 1.6s infinite}
+#bNdi.on.rx i{background:#36f58a;box-shadow:0 0 8px #36f58a}
+@keyframes blink{50%{opacity:.35}}
+#ndiPanel{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translate(-50%,10px);width:min(92vw,380px);z-index:6;
+  background:rgba(8,10,18,.88);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:16px;
+  font-family:var(--mono);font-size:12px;color:#c8d0e0;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+#ndiPanel.show{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+#ndiPanel h3{margin:0 0 12px;font-family:var(--sans);font-size:15px;letter-spacing:.14em;color:#fff}
+.seg{display:flex;gap:6px;margin-bottom:10px}
+.seg button{flex:1;padding:10px 0;border-radius:10px;border:1px solid rgba(255,255,255,.18);font-family:var(--mono);font-size:12px;color:#c8d0e0}
+.seg button.on{border-color:var(--acc);background:rgba(124,243,255,.14);color:#fff}
+#ndiStatus{min-height:2.8em;line-height:1.45;color:#fff;margin:4px 0 10px}
+#ndiStatus.warn{color:#ffb36b}
+.tm{font-size:10.5px;color:#7d859b;line-height:1.5}
+.tm a{color:var(--acc)}
 #err{position:fixed;inset:0;display:none;place-items:center;padding:30px;font-family:var(--mono);font-size:13px;color:#ffb36b;background:#000;z-index:9;white-space:pre-wrap;overflow:auto}
 </style>
 </head>
@@ -89,9 +106,18 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
       <button id="bMute" title="Sound (M)"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="wav" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
       <button id="bFlip" title="Flip camera (C)"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13.5a3 3 0 0 1 5.2-2M15 12.5a3 3 0 0 1-5.2 2"/></svg></button>
       <button id="bFs" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button id="bNdi" title="NDI output"><i></i>NDI</button>
       <button id="bSrc" title="Source"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </div>
+</div>
+<div id="ndiPanel">
+  <h3>NDI® OUTPUT</h3>
+  <div class="seg" id="ndiRes"><button data-v="off" class="on">Off</button><button data-v="720">720p</button><button data-v="1080">1080p</button></div>
+  <div class="seg" id="ndiOri"><button data-v="land" class="on">Landscape</button><button data-v="port">Portrait</button></div>
+  <div id="ndiStatus">Off. Pick a resolution to start sending.</div>
+  <div class="tm">The screen shows exactly what is sent. Controls are never in the feed.<br>
+  NDI® is a registered trademark of Vizrt NDI AB. <a href="https://ndi.video/">ndi.video</a></div>
 </div>
 <div id="toast"><b></b><span></span></div>
 <div id="param"><i></i></div>
@@ -331,6 +357,19 @@ void main(){
   o=vec4(clamp(s/16.,0.,1.),clamp(m/16.*4.,0.,1.));
 }`;
 
+/* NDI: pack RGB into UYVY 4:2:2 (BT.709, limited range), one RGBA texel = U Y0 V Y1, top row first */
+const FS_UYVY = `#version 300 es
+precision highp float; uniform sampler2D uSrc; uniform vec2 uOut; out vec4 o;
+vec3 yuv(vec3 c){ float y=dot(c,vec3(.2126,.7152,.0722)); return vec3(y,(c.b-y)/1.8556,(c.r-y)/1.5748); }
+void main(){
+  ivec2 p=ivec2(gl_FragCoord.xy);
+  float row=uOut.y-1.-float(p.y);
+  vec3 a=yuv(clamp(texelFetch(uSrc,ivec2(p.x*2,int(row)),0).rgb,0.,1.));
+  vec3 b=yuv(clamp(texelFetch(uSrc,ivec2(p.x*2+1,int(row)),0).rgb,0.,1.));
+  vec2 uv=(a.yz+b.yz)*.5;
+  o=vec4(128.+224.*uv.x, 16.+219.*a.x, 128.+224.*uv.y, 16.+219.*b.x)/255.;
+}`;
+
 /* final grade to the screen */
 const FS_OUT = HEAD + `
 uniform float uFocus, uFocusHue, uTintAmt, uGlitch; uniform vec3 uTint;
@@ -413,7 +452,7 @@ const MODES = [
   {name:'DRIP',    blurb:'bright things melt',               fs:FS_DRIP,    snd:{rev:.42,dly:.20,ratio:2.76,idx:1.4,dec:2.4,glide:.89}},
 ];
 const progs = { src:compile(FS_SRC), copy:compile(FS_COPY), ana:compile(FS_ANA), out:compile(FS_OUT),
-  rib:compile(FS_RIB,VS_RIB), pt:compile(FS_PT,VS_PT), fx:MODES.map(m=>compile(m.fs)) };
+  rib:compile(FS_RIB,VS_RIB), uyvy:compile(FS_UYVY), pt:compile(FS_PT,VS_PT), fx:MODES.map(m=>compile(m.fs)) };
 const emptyVao = gl.createVertexArray();
 
 /* dynamic geometry for ribbons and points */
@@ -434,14 +473,25 @@ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
 
 /* ------------------------------ render targets ------------------------------ */
 let W=0,H=0,R=null;
+function layoutCanvas(){
+  const cw=innerWidth, ch=innerHeight;
+  if(!NDI.on){ cv.style.width='100vw'; cv.style.height='100vh'; cv.style.left='0'; cv.style.top='0'; return; }
+  const k=Math.min(cw/W,ch/H), w=W*k, h=H*k;
+  cv.style.width=w+'px'; cv.style.height=h+'px'; cv.style.left=((cw-w)/2)+'px'; cv.style.top=((ch-h)/2)+'px';
+}
 function resize(){
   const dpr=Math.min(devicePixelRatio||1,2.5), cw=innerWidth, ch=innerHeight;
-  const maxPix=MOBILE?760000:1500000;
-  const k=Math.min(1,Math.sqrt(maxPix/(cw*ch*dpr*dpr)));
-  const nw=Math.max(2,Math.round(cw*dpr*k)), nh=Math.max(2,Math.round(ch*dpr*k));
-  if(R && nw===W && nh===H) return;
-  W=nw; H=nh; cv.width=W; cv.height=H;
+  let nw,nh;
+  if(NDI.on){ [nw,nh]=NDI.orient==='land'?[NDI.w,NDI.h]:[NDI.h,NDI.w]; }
+  else {
+    const maxPix=MOBILE?760000:1500000;
+    const k=Math.min(1,Math.sqrt(maxPix/(cw*ch*dpr*dpr)));
+    nw=Math.max(2,Math.round(cw*dpr*k)); nh=Math.max(2,Math.round(ch*dpr*k));
+  }
+  if(R && nw===W && nh===H){ layoutCanvas(); return; }
+  W=nw; H=nh; cv.width=W; cv.height=H; layoutCanvas();
   if(R){ [...R.src,...R.fb,R.ana,R.hist].forEach(t=>gl.deleteTexture(t)); [...R.srcF,...R.fbF,R.anaF,R.histF].forEach(f=>gl.deleteFramebuffer(f)); gl.deleteBuffer(R.pbo); if(R.fence) gl.deleteSync(R.fence); }
+  ndiFree();
   const src=[tex2D(W,H),tex2D(W,H)], fb=[tex2D(W,H,...FBFMT),tex2D(W,H,...FBFMT)];
   const long=288, hw=W>=H?long:Math.round(long*W/H), hh=W>=H?Math.round(long*H/W):long;
   const hist=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,hist);
@@ -456,6 +506,7 @@ function resize(){
   for(let l=0;l<HISTN;l++){ gl.bindFramebuffer(gl.FRAMEBUFFER,R.histF); gl.framebufferTextureLayer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,hist,0,l); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT); }
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   A.reset(GX*GY);
+  if(NDI.on) ndiAlloc();
 }
 
 /* ------------------------------ sources ------------------------------ */
@@ -504,9 +555,11 @@ class Sonic{
     this.g=g;
     this.out=g(0);
     const comp=C.createDynamicsCompressor(); comp.threshold.value=-16; comp.knee.value=10; comp.ratio.value=8; comp.attack.value=.003; comp.release.value=.25;
-    this.out.connect(comp).connect(C.destination);
+    this.mon=g(this.on?1:0);   // phone speaker; mute only affects this, the NDI feed keeps its sound
+    this.out.connect(comp); comp.connect(this.mon).connect(C.destination); this.comp=comp;
     this.scope=C.createAnalyser(); this.scope.fftSize=512; comp.connect(this.scope); this.scopeBuf=new Uint8Array(512);
-    this.out.gain.setTargetAtTime(this.on?.85:0,C.currentTime,.6);
+    this.out.gain.setTargetAtTime(.85,C.currentTime,.6);
+    if(NDI.avail) this.tap().catch(e=>console.warn('audio tap',e));
     this.bus=g(1); this.bus.connect(this.out);
     this.verb=C.createConvolver(); this.verb.buffer=this.ir(4.5); this.verbSend=g(.38); const vr=g(.9);
     this.verbSend.connect(this.verb).connect(vr).connect(this.out);
@@ -533,7 +586,14 @@ class Sonic{
   ir(sec){ const C=this.ctx, n=Math.floor(C.sampleRate*sec), b=C.createBuffer(2,n,C.sampleRate);
     for(let ch=0;ch<2;ch++){ const d=b.getChannelData(ch); let lp=0; for(let i=0;i<n;i++){ lp=lp*.6+(Math.random()*2-1)*.4; d[i]=lp*Math.pow(1-i/n,2.6)*(i<C.sampleRate*.012?i/(C.sampleRate*.012):1); } }
     return b; }
-  setMuted(m){ this.on=!m; if(this.ctx) this.out.gain.setTargetAtTime(m?0:.85,this.ctx.currentTime,.15); }
+  setMuted(m){ this.on=!m; if(this.ctx) this.mon.gain.setTargetAtTime(m?0:1,this.ctx.currentTime,.15); }
+  async tap(){
+    const code=`class T extends AudioWorkletProcessor{process(i){const x=i[0];if(x&&x.length){const l=x[0].slice(),r=(x[1]||x[0]).slice();this.port.postMessage([l,r],[l.buffer,r.buffer]);}return true;}}registerProcessor('ad-tap',T);`;
+    await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'text/javascript'})));
+    const n=new AudioWorkletNode(this.ctx,'ad-tap',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:'explicit'});
+    this.comp.connect(n); const z=this.g(0); n.connect(z).connect(this.ctx.destination);
+    n.port.onmessage=e=>ndiAudio(e.data[0],e.data[1],this.ctx.sampleRate);
+  }
   setMode(s){ this.snd=s; if(!this.ctx) return; const t=this.ctx.currentTime;
     this.verbSend.gain.setTargetAtTime(s.rev,t,.4); this.dlySend.gain.setTargetAtTime(s.dly,t,.4); }
   setChord(ch,now=false){
@@ -764,11 +824,18 @@ function render(){
   }
   // 4. comets & sparks into the feedback buffer
   gl.bindFramebuffer(gl.FRAMEBUFFER,R.fbF[R.fi]); gl.viewport(0,0,W,H); drawOverlay();
-  // 5. to screen
-  const op=progs.out; pass(op,null,W,H); bind(2,R.fb[R.fi]);
+  // 5. to screen (via an output buffer when sending NDI, so the exact same frame goes out)
+  const sending=NDI.on&&NDI.outF;
+  const op=progs.out; pass(op,sending?NDI.outF:null,W,H); bind(2,R.fb[R.fi]);
   gl.uniform1f(U(op,'uFocus'),V.focus); gl.uniform1f(U(op,'uFocusHue'),V.focusHue);
   gl.uniform3f(U(op,'uTint'),...V.tint); gl.uniform1f(U(op,'uTintAmt'),V.tintAmt); gl.uniform1f(U(op,'uGlitch'),V.glitch);
   gl.drawArrays(gl.TRIANGLES,0,3);
+  if(sending){
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER,NDI.outF); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,null);
+    gl.blitFramebuffer(0,0,W,H,0,0,W,H,gl.COLOR_BUFFER_BIT,gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    ndiCapture();
+  }
 }
 function pollAnalysis(dt){
   if(!R.fence) return;
@@ -794,12 +861,117 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.1,(now-lastNow)/1000); lastNow=now; T+=dt;
   if(R.fence){ const pdt=(now-lastPoll)/1000; const had=R.fence; pollAnalysis(Math.min(.2,pdt)); if(!R.fence&&had) lastPoll=now; }
+  if(NDI.on) ndiPoll();
   V.pulse*=Math.exp(-dt*5); V.glitch*=Math.exp(-dt*3.5); V.tintAmt*=Math.exp(-dt/12);
   V.focus+=(V.focusT-V.focus)*Math.min(1,dt*5);
   updateComets(dt);
   render();
   if(started && !hudHidden) drawScope();
 }
+
+/* ------------------------------ NDI® output ------------------------------
+   The app's native side (window.ADNative) owns the NDI sender. Frames go to it over a loopback
+   WebSocket: the final graded frame is packed to UYVY on the GPU, read back asynchronously
+   (PBO ring + fences) and sent at 30 fps. The soundscape goes the same way as planar float. */
+const NDI={avail:false,on:false,res:'off',orient:'land',w:1920,h:1080,fps:30,port:-1,ws:null,
+  outTex:null,outF:null,packTex:null,packF:null,pbos:[],fences:[],free:[],buf:null,next:0,
+  sent:0,dropped:0,hist:[],aL:null,aR:null,aN:0,conns:0,lastErr:''};
+try{ if(window.ADNative && ADNative.ndiAvailable()){ NDI.avail=true; NDI.port=ADNative.ndiPort(); } }catch(e){}
+function ndiFree(){
+  if(NDI.outTex){ gl.deleteTexture(NDI.outTex); gl.deleteFramebuffer(NDI.outF); gl.deleteTexture(NDI.packTex); gl.deleteFramebuffer(NDI.packF); }
+  NDI.fences.forEach(f=>f&&gl.deleteSync(f.sync)); NDI.pbos.forEach(b=>gl.deleteBuffer(b));
+  Object.assign(NDI,{outTex:null,outF:null,packTex:null,packF:null,pbos:[],fences:[],free:[]});
+}
+function ndiAlloc(){
+  ndiFree();
+  NDI.outTex=tex2D(W,H,gl.RGBA8,gl.UNSIGNED_BYTE,gl.NEAREST); NDI.outF=fbo(NDI.outTex);
+  NDI.packTex=tex2D(W/2,H,gl.RGBA8,gl.UNSIGNED_BYTE,gl.NEAREST); NDI.packF=fbo(NDI.packTex);
+  const bytes=W*H*2;
+  for(let i=0;i<3;i++){ const b=gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,b); gl.bufferData(gl.PIXEL_PACK_BUFFER,bytes,gl.STREAM_READ); NDI.pbos.push(b); NDI.free.push(i); }
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null); gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  NDI.buf=new Uint8Array(20+bytes); const dv=new DataView(NDI.buf.buffer);
+  dv.setUint8(0,86); dv.setInt32(4,W,true); dv.setInt32(8,H,true); dv.setInt32(12,NDI.fps,true); dv.setInt32(16,1,true);
+  NDI.next=0;
+}
+function ndiCapture(){
+  if(T<NDI.next || !NDI.free.length) return;
+  NDI.next=Math.max(NDI.next+1/NDI.fps, T-.5/NDI.fps);
+  const i=NDI.free.shift(), p=progs.uyvy;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,NDI.packF); gl.viewport(0,0,W/2,H); gl.useProgram(p);
+  gl.uniform2f(U(p,'uOut'),W,H); gl.uniform1i(U(p,'uSrc'),0); bind(0,NDI.outTex);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,NDI.pbos[i]); gl.readPixels(0,0,W/2,H,gl.RGBA,gl.UNSIGNED_BYTE,0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  NDI.fences.push({i,sync:gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0)}); gl.flush();
+}
+function ndiPoll(){
+  while(NDI.fences.length){
+    const f=NDI.fences[0], st=gl.clientWaitSync(f.sync,0,0);
+    if(st===gl.TIMEOUT_EXPIRED) break;
+    NDI.fences.shift(); gl.deleteSync(f.sync);
+    const ws=NDI.ws, bytes=NDI.buf.length-20;
+    if(ws&&ws.readyState===1&&ws.bufferedAmount<bytes*2.5){
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER,NDI.pbos[f.i]); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,NDI.buf,20,bytes); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+      ws.send(NDI.buf); NDI.sent++;
+    } else if(ws&&ws.readyState===1) NDI.dropped++;   // only count real back-pressure, not the link coming up
+    NDI.free.push(f.i);
+  }
+}
+function ndiAudio(l,r,sr){
+  if(!NDI.on||!NDI.ws||NDI.ws.readyState!==1) return;
+  const N=960;
+  if(!NDI.aL||NDI.aSr!==sr){ NDI.aBuf=new Uint8Array(20+N*2*4); NDI.aL=new Float32Array(NDI.aBuf.buffer,20,N); NDI.aR=new Float32Array(NDI.aBuf.buffer,20+N*4,N); NDI.aN=0; NDI.aSr=sr;
+    const dv=new DataView(NDI.aBuf.buffer); dv.setUint8(0,65); dv.setInt32(4,sr,true); dv.setInt32(8,2,true); dv.setInt32(12,N,true); }
+  for(let k=0;k<l.length;k++){ NDI.aL[NDI.aN]=l[k]; NDI.aR[NDI.aN]=r[k]; if(++NDI.aN===N){ NDI.ws.send(NDI.aBuf); NDI.aN=0; } }
+}
+function ndiConnect(){
+  if(!NDI.on||NDI.ws) return;
+  const ws=new WebSocket('ws://127.0.0.1:'+NDI.port); ws.binaryType='arraybuffer'; NDI.ws=ws;
+  ws.onclose=()=>{ NDI.ws=null; if(NDI.on) setTimeout(ndiConnect,800); };
+  ws.onerror=()=>{ NDI.lastErr='link to the NDI sender failed, retrying'; };
+  ws.onopen=()=>{ NDI.lastErr=''; };
+}
+function ndiSet(res,orient){
+  const was=NDI.on;
+  if(orient) NDI.orient=orient;
+  if(res){
+    NDI.res=res;
+    if(res==='off'){ NDI.lastErr=''; if(was){ try{ADNative.ndiStop();}catch(e){} NDI.on=false; NDI.ws&&NDI.ws.close(); NDI.ws=null; } }
+    else {
+      [NDI.w,NDI.h]=res==='1080'?[1920,1080]:[1280,720];
+      if(!was){ let ok=false; try{ ok=ADNative.ndiStart('AD Live'); }catch(e){}
+        if(!ok){ NDI.res='off'; NDI.lastErr='Could not start the NDI sender.'; ndiUi(); return; }
+        NDI.on=true; NDI.sent=NDI.dropped=0; NDI.hist=[]; ndiConnect(); }
+    }
+  }
+  resize(); ndiUi();
+}
+function ndiUi(){
+  [...$('#ndiRes').children].forEach(b=>b.classList.toggle('on',b.dataset.v===NDI.res));
+  [...$('#ndiOri').children].forEach(b=>b.classList.toggle('on',b.dataset.v===NDI.orient));
+  const b=$('#bNdi'); b.classList.toggle('on',NDI.on); b.classList.toggle('rx',NDI.on&&NDI.conns>0);
+  const st=$('#ndiStatus');
+  if(!NDI.on){ st.textContent=NDI.lastErr||'Off. Pick a resolution to start sending.'; st.classList.toggle('warn',!!NDI.lastErr); return; }
+  const h=NDI.hist.slice(-3), sent=h.reduce((a,x)=>a+x[0],0), drop=h.reduce((a,x)=>a+x[1],0), secs=Math.max(1,h.length);
+  const link=NDI.ws&&NDI.ws.readyState===1;
+  st.classList.toggle('warn',!link||drop>sent*.1);
+  st.innerHTML=`Sending <b>AD Live</b> · ${W}×${H} · ${(sent/secs).toFixed(0)} fps<br>`+
+    (link?`${NDI.conns>0?NDI.conns+' receiver'+(NDI.conns>1?'s':'')+' connected':'Waiting for a receiver on this network'}`+(drop?` · ${drop} frames dropped`:''):(NDI.lastErr||'Linking to the NDI sender…'));
+}
+setInterval(()=>{
+  if(!NDI.on) return;
+  try{ NDI.conns=ADNative.ndiConnections(); }catch(e){}
+  NDI.hist.push([NDI.sent,NDI.dropped]); NDI.sent=NDI.dropped=0; if(NDI.hist.length>10) NDI.hist.shift();
+  // can't keep up at 1080p for 3 s in a row: step down to 720p rather than stutter
+  const h=NDI.hist.slice(-3);
+  if(NDI.res==='1080' && h.length===3 && h.every(([s,d])=>d>(s+d)*.25)){ ndiSet('720'); showToast('NDI 720p','1080p couldn\u2019t keep up'); }
+  ndiUi();
+},1000);
+if(NDI.avail) $('#bNdi').style.display='grid';
+$('#bNdi').onclick=e=>{ e.stopPropagation(); $('#ndiPanel').classList.toggle('show'); ndiUi(); };
+$('#ndiRes').onclick=e=>{ const v=e.target.dataset&&e.target.dataset.v; if(v) ndiSet(v); };
+$('#ndiOri').onclick=e=>{ const v=e.target.dataset&&e.target.dataset.v; if(v) ndiSet(null,v); };
+function showToast(a,b){ const t=$('#toast'); t.querySelector('b').textContent=a; t.querySelector('span').textContent=b; t.classList.add('show'); clearTimeout(showToast.tm); showToast.tm=setTimeout(()=>t.classList.remove('show'),1600); }
 
 /* ------------------------------ UI ------------------------------ */
 const hud=$('#hud'); let hudHidden=false;
@@ -859,7 +1031,9 @@ cv.addEventListener('pointerdown',e=>{
   if(!started) return;
   cv.setPointerCapture(e.pointerId);
   ptr={id:e.pointerId,x0:e.clientX,y0:e.clientY,p0:params[mode],t0:performance.now(),moved:false,focus:false,mode:null};
-  ptr.lp=setTimeout(()=>{ if(ptr&&!ptr.moved){ ptr.focus=true; focusStart(e.clientX/innerWidth,1-e.clientY/innerHeight); } },420);
+  const rc=cv.getBoundingClientRect(), fx=Math.min(1,Math.max(0,(e.clientX-rc.left)/rc.width)), fy=Math.min(1,Math.max(0,1-(e.clientY-rc.top)/rc.height));
+  $('#ndiPanel').classList.remove('show');
+  ptr.lp=setTimeout(()=>{ if(ptr&&!ptr.moved){ ptr.focus=true; focusStart(fx,fy); } },420);
 });
 cv.addEventListener('pointermove',e=>{
   if(!ptr||e.pointerId!==ptr.id) return;
@@ -897,7 +1071,7 @@ addEventListener('resize',()=>resize());
 resize(); showMode(false); setChord(NEUTRAL);
 requestAnimationFrame(frame);
 // test hook (harmless in normal use)
-window.__AD={setMode,go,get mode(){return mode},A,V,comets,spawnComet};
+window.__AD={setMode,go,get mode(){return mode},A,V,comets,spawnComet,NDI,ndiSet};
 </script>
 </body>
 </html>
