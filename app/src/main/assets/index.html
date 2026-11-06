@@ -47,11 +47,13 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   display:flex;flex-direction:column;justify-content:space-between}
 #hud.off{opacity:0}
 #hud .top{display:flex;justify-content:space-between;align-items:flex-start}
-#mname{font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:.14em}
+#mname{font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:.14em;pointer-events:auto;cursor:pointer;padding:4px 10px 6px 0}
+#mname .nx{color:var(--acc);margin-left:6px}
 #mname small{display:block;font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.04em;color:var(--dim);margin-top:3px}
-#dots{display:flex;gap:6px;padding-top:8px}
-#dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}
-#dots i.on{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+#dots{display:flex;gap:0;padding-top:2px;pointer-events:auto}
+#dots i{width:22px;height:22px;display:grid;place-items:center;cursor:pointer}
+#dots i::after{content:'';width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.25)}
+#dots i.on::after{background:var(--acc);box-shadow:0 0 8px var(--acc)}
 #hud .bot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
 .info{font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:5px}
 #chord{font-size:15px;color:var(--fg);display:flex;align-items:center;gap:8px}
@@ -65,6 +67,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #toast.show{opacity:1}
 #toast b{display:block;font-family:var(--sans);font-size:clamp(30px,9vw,64px);letter-spacing:.12em;text-shadow:0 0 24px rgba(124,243,255,.6)}
 #toast span{font-family:var(--mono);font-size:13px;color:#cfd6e6}
+#param::before{content:'SHAPE';position:absolute;right:10px;top:-2px;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:#cfd6e6;writing-mode:vertical-rl}
+#sens{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(120px + env(safe-area-inset-bottom));width:min(60vw,320px);height:4px;border-radius:2px;background:rgba(255,255,255,.15);z-index:4;opacity:0;transition:opacity .4s;pointer-events:none}
+#sens.show{opacity:1}
+#sens i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:#ffd166;box-shadow:0 0 10px #ffd166}
+#sens b{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.2em;color:#fff}
+#lens{position:fixed;width:96px;height:96px;margin:-150px 0 0 -48px;z-index:4;pointer-events:none;opacity:0;transition:opacity .2s;border-radius:50%;
+  -webkit-mask:radial-gradient(circle,transparent 36px,#000 37px);mask:radial-gradient(circle,transparent 36px,#000 37px)}
+#lens.show{opacity:1}
+#lensT{position:fixed;z-index:4;pointer-events:none;margin:-44px 0 0 -60px;width:120px;text-align:center;font-family:var(--mono);font-size:11px;color:#fff;opacity:0;transition:opacity .2s;text-shadow:0 1px 4px #000}
+#lensT.show{opacity:1}
 #param{position:fixed;right:calc(10px + env(safe-area-inset-right));top:30%;height:40%;width:4px;border-radius:2px;background:rgba(255,255,255,.15);z-index:4;opacity:0;transition:opacity .4s;pointer-events:none}
 #param.show{opacity:1}
 #param i{position:absolute;left:0;right:0;bottom:0;border-radius:2px;background:var(--acc);box-shadow:0 0 10px var(--acc)}
@@ -121,6 +133,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 </div>
 <div id="toast"><b></b><span></span></div>
 <div id="param"><i></i></div>
+<div id="sens"><b></b><i></i></div>
+<div id="lens"></div><div id="lensT"></div>
 
 <div id="start">
   <div class="brand"><span class="glitch" data-t="Another Distraction">Another Distraction</span><em>live</em></div>
@@ -133,9 +147,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   </div>
   <p id="note"></p>
   <ul class="how">
-    <li><b>swipe ← →</b> change effect</li>
-    <li><b>drag ↑ ↓</b> shape it</li>
-    <li><b>hold</b> hyperfocus on one colour</li>
+    <li><b>two-finger swipe ← →</b> or <b>tap the name</b> change effect</li>
+    <li><b>drag ↑ ↓</b> shape it · <b>drag ← →</b> sensitivity</li>
+    <li><b>hold</b> focus on one colour, then slide <b>← →</b> width, <b>↑ ↓</b> hue</li>
     <li><b>double-tap</b> flip camera · <b>tap</b> hide controls</li>
   </ul>
   <p class="credo">I shall use my time.</p>
@@ -174,7 +188,7 @@ uniform sampler2D uCur, uPrev, uFb;
 uniform sampler2DArray uHist;
 uniform int uHead, uHistN;
 uniform vec2 uRes;
-uniform float uTime, uParam, uBright, uMotion, uPulse;
+uniform float uTime, uParam, uBright, uMotion, uPulse, uSens;
 const float PI=3.14159265, TAU=6.2831853;
 float luma(vec3 c){return dot(c,vec3(.2126,.7152,.0722));}
 float hash12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
@@ -238,8 +252,9 @@ void main(){
   vec3 C[3]; float N[3]; float M[3];
   float norm=.5/max(uBright,.12);
   for(int k=0;k<3;k++){ vec2 uv=clamp(P[k]/uRes,0.,1.); vec3 c=texture(uCur,uv).rgb; float L=luma(c);
-    C[k]=normalize(c+.002)*1.7; N[k]=smoothstep(.26,.95,L*norm);
-    M[k]=smoothstep(.035,.22,abs(L-luma(texture(uPrev,uv).rgb))); }
+    float lo=mix(.55,.02,uSens), mlo=mix(.08,.01,uSens);
+    C[k]=normalize(c+.002)*1.7; N[k]=smoothstep(lo,lo+.69,L*norm);
+    M[k]=smoothstep(mlo,mlo*6.,abs(L-luma(texture(uPrev,uv).rgb))); }
   vec3 strut=vec3(.22,.42,1.), tip=vec3(1.,.78,.5);
   vec3 col=vec3(.006,.012,.035)+texture(uCur,vUv).rgb*.045;
   float w=max(1.,s*.035);
@@ -267,7 +282,7 @@ void main(){
   cen=mat2(cos(ang),sin(ang),-sin(ang),cos(ang))*cen*(1.-.004*uParam);
   vec3 fb=texture(uFb,cen+.5-flow*px*mix(2.,14.,uParam)).rgb;
   fb=hueRot(fb,.035)*.972;
-  float m=smoothstep(.025,.18,abs(dt));
+  float mlo=mix(.056,.007,uSens); float m=smoothstep(mlo,mlo*7.,abs(dt));
   vec3 inj=hueRot(cur*1.5,uTime*.6+c*4.);
   vec3 col=mix(fb,inj,m);
   col=max(col,cur*.22);
@@ -283,7 +298,7 @@ void main(){
   vec3 cur=texture(uCur,vUv).rgb; float L=luma(cur);
   float N=float(uHistN);
   float slit=1.-vUv.y+.06*sin(vUv.x*9.+uTime*.7);
-  float d=mix(slit,1.-smoothstep(.05,.85,L),smoothstep(0.,1.,uParam));
+  float d=mix(slit,1.-smoothstep(.05,.85,L*mix(.5,1.5,uSens)),smoothstep(0.,1.,uParam));
   float base=d*(N-10.);
   float spread=clamp(1.5+uMotion*40.,1.5,4.);
   vec3 col=vec3(hist(base).r,hist(base+spread).g,hist(base+2.*spread).b);
@@ -307,7 +322,7 @@ void main(){
   float rr=pow(r,1.2)*(.86+.1*sin(uTime*.13));
   vec2 suv=.5+vec2(cos(th),sin(th))*rr*.5;
   vec3 cam=texture(uCur,suv).rgb;
-  float key=smoothstep(.1,.5,luma(cam));
+  float klo=mix(.25,-.05,uSens); float key=smoothstep(klo,klo+.4,luma(cam));
   vec3 col=mix(tun,cam*1.35,key*.65+.35);
   col+=vec3(.25,.4,1.)*exp(-pow((1.-r)*38.,2.))*.55;
   col+=vec3(1.,.9,.7)*exp(-r*r*900.)*(.4+uPulse);
@@ -325,7 +340,7 @@ void main(){
   float e=length(vec2(gx,gy));
   float m=abs(luma(texture(uCur,vUv).rgb)-luma(texture(uPrev,vUv).rgb));
   vec3 hc=hsv2rgb(vec3(fract(atan(gy,gx)/TAU+uTime*.05+vUv.y*.2),.85,1.));
-  vec3 neon=hc*smoothstep(.07,.45,e)*(1.+m*14.)*1.25;
+  float elo=mix(.16,.0,uSens); vec3 neon=hc*smoothstep(elo,elo+.38,e)*(1.+m*14.)*1.25;
   float rise=(1.+uParam*5.)/uRes.y;
   vec2 fuv=vUv-vec2(sin(vUv.y*40.+uTime*3.)*.0016*uParam,rise);
   vec3 fb=hueRot(texture(uFb,fuv).rgb,.016)*mix(.85,.97,uParam);
@@ -339,7 +354,7 @@ void main(){
   float col=floor(vUv.x*uRes.x/2.);
   float sp=(1.+hash12(vec2(col,1.))*5.)*(.4+uParam*2.4)/uRes.y;
   vec3 f=hueRot(texture(uFb,vUv+vec2(0.,sp)).rgb,.006);
-  float thr=clamp(uBright*1.2+.3,.5,.9);
+  float thr=clamp(uBright*1.2+.3-(uSens-.5)*.6,.3,.95);
   f*=luma(f)>thr*.8?.972:.78;
   vec3 hot=cur*smoothstep(thr,thr+.15,L)*1.15;
   o=vec4(max(cur*.6,max(hot,f)),1.);
@@ -372,7 +387,7 @@ void main(){
 
 /* final grade to the screen */
 const FS_OUT = HEAD + `
-uniform float uFocus, uFocusHue, uTintAmt, uGlitch; uniform vec3 uTint;
+uniform float uFocus, uFocusHue, uFocusW, uTintAmt, uGlitch; uniform vec3 uTint;
 void main(){
   vec2 uv=vUv;
   if(uGlitch>.01){ float row=floor(uv.y*46.); float h=hash12(vec2(row,floor(uTime*18.)));
@@ -380,7 +395,7 @@ void main(){
   vec2 dir=uv-.5; float ca=.0012+uPulse*.006+uGlitch*.012;
   vec3 c=vec3(texture(uFb,uv-dir*ca).r,texture(uFb,uv).g,texture(uFb,uv+dir*ca).b);
   if(uFocus>.001){ vec3 h=rgb2hsv(c); float dh=abs(fract(h.x-uFocusHue+.5)-.5);
-    float keep=smoothstep(.1,.035,dh)*smoothstep(.12,.3,h.y);
+    float inner=mix(.008,.12,uFocusW), slo=mix(.2,.05,uFocusW); float keep=smoothstep(inner*2.6+.01,inner,dh)*smoothstep(slo,slo+.15,h.y);
     c=mix(c,vec3(luma(c))*.1,uFocus*(1.-keep)); c*=1.+keep*uFocus*.7; }
   c=mix(c,luma(c)*uTint*1.8,uTintAmt*.22);
   c*=1.+uPulse*.16;
@@ -678,7 +693,7 @@ function analyse(buf){
   if(sm>1e-4){ A.mx+=(smx/sm-A.mx)*.2; A.my+=(smy/sm-A.my)*.2; }
   A.hueX=A.hueX*.95+hx/n*.05; A.hueY=A.hueY*.95+hy/n*.05;
   A.last=cells;
-  for(let i=0;i<n;i++){ const c=cells[i]; const sc=Math.pow(c.L,3)*(.35+c.m*5)*(.5+c.s); if(c.L>A.bright+.22 && sc>bestS){ bestS=sc; best=i; } }
+  for(let i=0;i<n;i++){ const c=cells[i]; const sc=Math.pow(c.L,3)*(.35+c.m*5)*(.5+c.s); if(c.L>A.bright+lerp(.4,.06,V.sens) && sc>bestS){ bestS=sc; best=i; } }
   return {cells,best,bestS};
 }
 
@@ -687,7 +702,7 @@ function events(res,dt){
   A.tokens=Math.min(4,A.tokens+dt*(1.2+A.motion*28));
   const cand=[];
   for(let i=0;i<n;i++){ const c=cells[i]; const d=c.m-A.base[i]; A.base[i]+=(c.m-A.base[i])*.08;
-    if(d>.11 && T>A.cool[i]) cand.push([d,i]); }
+    if(d>lerp(.22,.03,V.sens) && T>A.cool[i]) cand.push([d,i]); }
   cand.sort((a,b)=>b[0]-a[0]);
   const sc=snd.scale();
   for(const [d,i] of cand){
@@ -708,10 +723,11 @@ function events(res,dt){
   const want=sec<0?NEUTRAL:CHORDS[sec];
   if(want!==snd.chord && T-A.candSince>1.6 && T>A.chordHold){ setChord(want); A.chordHold=T+4; }
   // a shiny thing breaks away as a comet
-  if(res.best>=0 && res.bestS>.12 && T>A.cometNext && comets.length<3){
+  if(res.best>=0 && res.bestS>.12*lerp(2,.25,V.sens) && T>A.cometNext && comets.length<3){
     const c=cells[res.best]; spawnComet(c.x,c.y,c.h,Math.max(.6,c.s)); A.cometNext=T+4+Math.random()*5;
   }
 }
+const lerp=(a,b,t)=>a+(b-a)*t;
 function setChord(ch){ snd.setChord(ch); const sw=$('#chord i'); sw.style.background=ch.hue<0?'#9aa3b8':`hsl(${ch.hue*360},90%,62%)`; $('#chord span').textContent=ch.name; }
 function hsvRgb(h,s,v){ const f=n=>{const k=(n+h*6)%6; return v-v*s*Math.max(0,Math.min(k,4-k,1));}; return [f(5),f(3),f(1)]; }
 
@@ -775,11 +791,11 @@ function drawOverlay(){
 /* ------------------------------ frame ------------------------------ */
 let mode=0, T=0, started=false;
 const params=MODES.map(()=>.5);
-const V={pulse:0,glitch:0,tint:[1,1,1],tintAmt:0,focus:0,focusT:0,focusHue:0};
+const V={pulse:0,glitch:0,tint:[1,1,1],tintAmt:0,focus:0,focusT:0,focusHue:0,focusW:.25,sens:.5};
 
 function bind(unit,tex,target=gl.TEXTURE_2D){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(target,tex); }
 function common(p){
-  gl.uniform2f(U(p,'uRes'),W,H); gl.uniform1f(U(p,'uTime'),T); gl.uniform1f(U(p,'uParam'),params[mode]);
+  gl.uniform2f(U(p,'uRes'),W,H); gl.uniform1f(U(p,'uTime'),T); gl.uniform1f(U(p,'uParam'),params[mode]); gl.uniform1f(U(p,'uSens'),V.sens);
   gl.uniform1f(U(p,'uBright'),A.bright); gl.uniform1f(U(p,'uMotion'),A.motion); gl.uniform1f(U(p,'uPulse'),V.pulse);
   gl.uniform1i(U(p,'uHead'),R.head); gl.uniform1i(U(p,'uHistN'),HISTN);
 }
@@ -827,7 +843,7 @@ function render(){
   // 5. to screen (via an output buffer when sending NDI, so the exact same frame goes out)
   const sending=NDI.on&&NDI.outF;
   const op=progs.out; pass(op,sending?NDI.outF:null,W,H); bind(2,R.fb[R.fi]);
-  gl.uniform1f(U(op,'uFocus'),V.focus); gl.uniform1f(U(op,'uFocusHue'),V.focusHue);
+  gl.uniform1f(U(op,'uFocus'),V.focus); gl.uniform1f(U(op,'uFocusHue'),V.focusHue); gl.uniform1f(U(op,'uFocusW'),V.focusW);
   gl.uniform3f(U(op,'uTint'),...V.tint); gl.uniform1f(U(op,'uTintAmt'),V.tintAmt); gl.uniform1f(U(op,'uGlitch'),V.glitch);
   gl.drawArrays(gl.TRIANGLES,0,3);
   if(sending){
@@ -977,11 +993,13 @@ function showToast(a,b){ const t=$('#toast'); t.querySelector('b').textContent=a
 const hud=$('#hud'); let hudHidden=false;
 const dots=$('#dots'); MODES.forEach(()=>dots.appendChild(document.createElement('i')));
 function showMode(toast=true){
-  $('#mname').innerHTML=MODES[mode].name+'<small>'+MODES[mode].blurb+'</small>';
+  $('#mname').innerHTML=MODES[mode].name+'<span class="nx">›</span><small>'+MODES[mode].blurb+'</small>';
   [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===mode));
   if(toast){ const t=$('#toast'); t.querySelector('b').textContent=MODES[mode].name; t.querySelector('span').textContent=MODES[mode].blurb;
     t.classList.add('show'); clearTimeout(showMode.tm); showMode.tm=setTimeout(()=>t.classList.remove('show'),1100); }
 }
+$('#mname').onclick=e=>{ e.stopPropagation(); if(started) setMode(mode+1); };
+$('#dots').onclick=e=>{ e.stopPropagation(); const i=[...$('#dots').children].indexOf(e.target); if(started&&i>=0) setMode(i); };
 function setMode(m){ mode=(m+MODES.length)%MODES.length; snd.setMode(MODES[mode].snd); V.glitch=Math.max(V.glitch,.5); showMode(); }
 function showParam(){ const p=$('#param'); p.querySelector('i').style.height=(params[mode]*100)+'%'; p.classList.add('show'); clearTimeout(showParam.tm); showParam.tm=setTimeout(()=>p.classList.remove('show'),900); }
 function setHud(hidden){ hudHidden=hidden; hud.classList.toggle('off',hidden); }
@@ -1026,26 +1044,60 @@ function focusStart(x,y){
   V.focusHue=h; V.focusT=1; snd.arpStart();
   sparks.push({x,y,col:hsvRgb(h,.8,1),t:0,life:1,max:180,kind:1});
 }
-function focusEnd(){ V.focusT=0; snd.arpStop(); }
+function focusEnd(){ V.focusT=0; snd.arpStop(); $('#lens').classList.remove('show'); $('#lensT').classList.remove('show'); }
+function showLens(px,py){
+  const inner=lerp(.008,.12,V.focusW)*360, outer=(lerp(.008,.12,V.focusW)*2.6+.01)*360, h=V.focusHue*360;
+  const l=$('#lens'), t=$('#lensT');
+  l.style.left=px+'px'; l.style.top=py+'px'; t.style.left=px+'px'; t.style.top=(py-150)+'px';
+  l.style.background=`conic-gradient(from ${-outer}deg, hsl(${h-outer},90%,60%) 0deg, hsl(${h},95%,62%) ${outer}deg, hsl(${h+outer},90%,60%) ${2*outer}deg, rgba(255,255,255,.08) ${2*outer}deg)`;
+  t.textContent=`${Math.round(h)}° ± ${Math.round(inner)}°`;
+  l.classList.add('show'); t.classList.add('show');
+}
+function showSens(){ const b=$('#sens'); b.querySelector('i').style.width=(V.sens*100)+'%'; b.querySelector('b').textContent='SENSITIVITY '+Math.round(V.sens*100)+'%';
+  b.classList.add('show'); clearTimeout(showSens.tm); showSens.tm=setTimeout(()=>b.classList.remove('show'),900); }
+const touches=new Map(); let multi=null;
 cv.addEventListener('pointerdown',e=>{
   if(!started) return;
   cv.setPointerCapture(e.pointerId);
-  ptr={id:e.pointerId,x0:e.clientX,y0:e.clientY,p0:params[mode],t0:performance.now(),moved:false,focus:false,mode:null};
-  const rc=cv.getBoundingClientRect(), fx=Math.min(1,Math.max(0,(e.clientX-rc.left)/rc.width)), fy=Math.min(1,Math.max(0,1-(e.clientY-rc.top)/rc.height));
+  touches.set(e.pointerId,{x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY});
   $('#ndiPanel').classList.remove('show');
-  ptr.lp=setTimeout(()=>{ if(ptr&&!ptr.moved){ ptr.focus=true; focusStart(fx,fy); } },420);
+  if(touches.size>=2){                     // second finger: this is a mode swipe, undo any one-finger gesture
+    if(ptr){ clearTimeout(ptr.lp); if(ptr.focus) focusEnd(); params[mode]=ptr.p0; V.sens=ptr.s0; ptr=null; }
+    clearTimeout(tapTm); multi={done:false}; return;
+  }
+  ptr={id:e.pointerId,x0:e.clientX,y0:e.clientY,p0:params[mode],s0:V.sens,t0:performance.now(),moved:false,focus:false,mode:null};
+  const rc=cv.getBoundingClientRect(), fx=Math.min(1,Math.max(0,(e.clientX-rc.left)/rc.width)), fy=Math.min(1,Math.max(0,1-(e.clientY-rc.top)/rc.height));
+  ptr.lp=setTimeout(()=>{ if(ptr&&!ptr.moved){ Object.assign(ptr,{focus:true,fx0:ptr.lx??ptr.x0,fy0:ptr.ly??ptr.y0,w0:V.focusW}); focusStart(fx,fy); ptr.h0=V.focusHue; showLens(ptr.fx0,ptr.fy0); } },420);
 });
 cv.addEventListener('pointermove',e=>{
+  const t=touches.get(e.pointerId); if(t){ t.x=e.clientX; t.y=e.clientY; }
   if(!ptr||e.pointerId!==ptr.id) return;
+  ptr.lx=e.clientX; ptr.ly=e.clientY;
+  if(ptr.focus){                            // holding: ← → colour width, ↑ ↓ hue
+    V.focusW=Math.max(0,Math.min(1,ptr.w0+(e.clientX-ptr.fx0)/(innerWidth*.7)));
+    V.focusHue=((ptr.h0-(e.clientY-ptr.fy0)/(innerHeight*1.2))%1+1)%1;
+    showLens(e.clientX,e.clientY); return;
+  }
   const dx=e.clientX-ptr.x0, dy=e.clientY-ptr.y0;
   if(!ptr.moved && Math.hypot(dx,dy)>14){ ptr.moved=true; clearTimeout(ptr.lp); ptr.mode=Math.abs(dy)>Math.abs(dx)?'v':'h'; }
-  if(ptr.mode==='v' && !ptr.focus){ params[mode]=Math.max(0,Math.min(1,ptr.p0-dy/(innerHeight*.6))); showParam(); }
+  if(ptr.mode==='v'){ params[mode]=Math.max(0,Math.min(1,ptr.p0-dy/(innerHeight*.6))); showParam(); }
+  else if(ptr.mode==='h'){ V.sens=Math.max(0,Math.min(1,ptr.s0+dx/(innerWidth*.7))); showSens(); }
 });
 function endPtr(e){
+  const t=touches.get(e.pointerId); touches.delete(e.pointerId);
+  if(multi){
+    if(!multi.done && t){                   // first finger up decides the swipe
+      let dx=t.x-t.x0, dy=t.y-t.y0, n=1;
+      for(const o of touches.values()){ dx+=o.x-o.x0; dy+=o.y-o.y0; n++; }
+      dx/=n; dy/=n; multi.done=true;
+      if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)) setMode(mode+(dx<0?1:-1));
+    }
+    if(!touches.size) multi=null;
+    return;
+  }
   if(!ptr||e.pointerId!==ptr.id) return; clearTimeout(ptr.lp);
-  const dx=e.clientX-ptr.x0, dt=performance.now()-ptr.t0;
+  const dt=performance.now()-ptr.t0;
   if(ptr.focus) focusEnd();
-  else if(ptr.mode==='h' && Math.abs(dx)>50) setMode(mode+(dx<0?1:-1));
   else if(!ptr.moved && dt<350){
     const now=performance.now();
     if(now-lastTap<300){ clearTimeout(tapTm); lastTap=0; flip(); }
@@ -1055,11 +1107,12 @@ function endPtr(e){
 }
 cv.addEventListener('pointerup',endPtr); cv.addEventListener('pointercancel',endPtr);
 addEventListener('keydown',e=>{
-  if(!started||e.repeat&&e.key!=='ArrowUp'&&e.key!=='ArrowDown') return;
+  if(!started||e.repeat&&!['ArrowUp','ArrowDown','[',']'].includes(e.key)) return;
   const k=e.key;
   if(k==='ArrowRight') setMode(mode+1); else if(k==='ArrowLeft') setMode(mode-1);
   else if(k==='ArrowUp'||k==='ArrowDown'){ params[mode]=Math.max(0,Math.min(1,params[mode]+(k==='ArrowUp'?.04:-.04))); showParam(); }
   else if(k>='1'&&k<=String(MODES.length)) setMode(+k-1);
+  else if(k==='['||k===']'){ V.sens=Math.max(0,Math.min(1,V.sens+(k===']'?.05:-.05))); showSens(); }
   else if(k===' '){ e.preventDefault(); focusStart(.5,.5); }
   else if(k==='f'||k==='F') toggleFs(); else if(k==='m'||k==='M') toggleMute();
   else if(k==='h'||k==='H') setHud(!hudHidden); else if(k==='c'||k==='C') flip();
