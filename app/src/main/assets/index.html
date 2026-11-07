@@ -360,6 +360,72 @@ void main(){
   o=vec4(max(cur*.6,max(hot,f)),1.);
 }`;
 
+/* 6 — MAP: generative media painted onto a surface the camera finds (a card in perspective, or any bright shape) */
+const FS_MAP = HEAD + `
+uniform mat3 uHinv; uniform float uMapHave, uThr, uCardAsp, uHue, uTintAmt; uniform int uMapKind, uPat;
+uniform sampler2D uMask; uniform vec4 uBlob; uniform vec3 uTint;
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash12(i),hash12(i+vec2(1,0)),f.x),mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),f.x),f.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){ v+=a*vn(p); p=p*2.03+17.1; a*=.5; } return v; }
+vec3 pal(float t){ float h=uHue<0.?.55:uHue; return mix(hsv2rgb(vec3(fract(h+t),.78,1.)),uTint,uTintAmt*.6); }
+vec3 contours(vec2 p){
+  float f=fbm(p*1.7+vec2(0.,uTime*.12)+.3*vec2(sin(uTime*.2),cos(uTime*.17)));
+  float l=fract(f*9.-uTime*.35); float line=smoothstep(.38,.47,abs(l-.5));
+  return pal(f*.6)*line*1.5+pal(.5)*.05; }
+vec3 caustics(vec2 p){
+  vec2 q=p*9.;
+  for(int k=0;k<4;k++){ float fk=float(k); q+=.38*vec2(sin(q.y*.8+uTime*.6+fk*1.3),sin(q.x*.7-uTime*.5+fk*2.1)); }
+  float c=abs(sin(q.x)*sin(q.y)); float v=pow(1.-c,7.);
+  return pal(.0)*v*1.5+pal(.08)*pow(1.-c,2.5)*.3+pal(.1)*.04; }
+vec3 truchet(vec2 p){
+  vec2 g=p*5., id=floor(g), f=fract(g); float h=hash12(id);
+  if(h>.5) f.x=1.-f.x;
+  float d=min(abs(length(f)-.5),abs(length(f-1.)-.5));
+  float line=smoothstep(.07,.02,d);
+  float run=.5+.5*sin((g.x+g.y)*2.2-uTime*3.+h*6.28);
+  return pal(h*.25)*line*(.35+1.2*run); }
+vec3 lattice(vec2 p){
+  vec2 q=vec2(p.x-p.y*.57735,p.y*1.1547)*4.5; vec2 f=fract(q);
+  float d=min(min(f.x,f.y),abs(1.-f.x-f.y)*.7071);
+  float wave=.5+.5*sin(length(p-vec2(uCardAsp*.5,.5))*10.-uTime*3.);
+  float node=1.-smoothstep(.0,.12,min(length(f),min(length(f-vec2(1,0)),min(length(f-vec2(0,1)),length(f-1.)))));
+  return pal(.6*wave)*(smoothstep(.05,.01,d)*(.4+wave+uPulse)+node*1.4); }
+vec3 opart(vec2 p){
+  vec2 c=p-vec2(uCardAsp*.5,.5); float r=length(c), a=atan(c.y,c.x);
+  float v=smoothstep(-.25,.25,sin(r*44.-uTime*4.+3.*sin(a*3.+uTime*.7)+uPulse*3.));
+  return mix(vec3(.02),pal(r*.4)*1.3,v); }
+void main(){
+  vec3 cam=texture(uCur,vUv).rgb; float L=luma(cam);
+  vec2 puv; float inside, edge=0.;
+  if(uMapKind==0){
+    vec3 q=uHinv*vec3(vUv,1.); vec2 uv=q.xy/q.z;
+    float e=min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y));
+    inside=smoothstep(-.004,.006,e)*step(0.,q.z);
+    edge=exp(-pow(e/.012,2.))*step(-.03,e)*step(0.,q.z);
+    puv=uv*vec2(uCardAsp,1.);
+  } else {
+    inside=smoothstep(.3,.7,texture(uMask,vUv).r);
+    vec2 a=vec2(uRes.x/uRes.y,1.); vec2 d=(vUv-uBlob.xy)*a;
+    float cs=cos(-uBlob.z), sn=sin(-uBlob.z); d=mat2(cs,sn,-sn,cs)*d;
+    puv=d/max(uBlob.w,.05)*.5+vec2(.5);
+  }
+  float paper=smoothstep(uThr-.08,uThr+.04,L);     // fingers and shadows are darker than the surface: they stay in front
+  float al=inside*paper*uMapHave;
+  vec3 pat = uPat==0?contours(puv): uPat==1?caustics(puv): uPat==2?truchet(puv): uPat==3?lattice(puv): opart(puv);
+  vec3 lit=pat*(.3+.95*L/max(uThr+.15,.3));        // keep the surface's own light and creases
+  vec3 room=mix(vec3(luma(cam)),cam,.6)*.42;
+  vec3 col=mix(room,lit,al);
+  col+=pal(.1)*edge*uMapHave*(.7+uPulse);
+  o=vec4(col,1.);
+}`;
+
+/* MAP detector input: camera luma at low resolution */
+const FS_DET = HEAD + `
+uniform vec2 uDet;
+void main(){ vec2 t=.25/uDet; float l=0.;
+  for(int j=0;j<2;j++) for(int i=0;i<2;i++) l+=luma(texture(uCur,vUv+(vec2(i,j)*2.-1.)*t).rgb);
+  o=vec4(l*.25,0.,0.,1.); }`;
+
 /* analysis: per-cell average colour of the OUTPUT + source motion */
 const FS_ANA = HEAD + `
 uniform vec2 uGrid;
@@ -465,8 +531,10 @@ const MODES = [
   {name:'DOME',    blurb:'a fulldome kaleidoscope',          fs:FS_DOME,    snd:{rev:.62,dly:.15,ratio:3.5, idx:1.0,dec:4.0,glide:1}},
   {name:'NEON',    blurb:'edges become light',               fs:FS_NEON,    snd:{rev:.22,dly:.25,ratio:1.5, idx:3.0,dec:0.9,glide:1}},
   {name:'DRIP',    blurb:'bright things melt',               fs:FS_DRIP,    snd:{rev:.42,dly:.20,ratio:2.76,idx:1.4,dec:2.4,glide:.89}},
+  {name:'MAP',     blurb:'paints onto what you hold up',     fs:FS_MAP,     snd:{rev:.45,dly:.18,ratio:3.5, idx:1.3,dec:2.6,glide:1}},
 ];
-const progs = { src:compile(FS_SRC), copy:compile(FS_COPY), ana:compile(FS_ANA), out:compile(FS_OUT),
+const MAP_MODE=MODES.length-1, MAP_PATS=['CONTOURS','CAUSTICS','TRUCHET','LATTICE','OP-ART'];
+const progs = { src:compile(FS_SRC), copy:compile(FS_COPY), ana:compile(FS_ANA), out:compile(FS_OUT), det:compile(FS_DET),
   rib:compile(FS_RIB,VS_RIB), uyvy:compile(FS_UYVY), pt:compile(FS_PT,VS_PT), fx:MODES.map(m=>compile(m.fs)) };
 const emptyVao = gl.createVertexArray();
 
@@ -506,7 +574,7 @@ function resize(){
   if(R && nw===W && nh===H){ layoutCanvas(); return; }
   W=nw; H=nh; cv.width=W; cv.height=H; layoutCanvas();
   if(R){ [...R.src,...R.fb,R.ana,R.hist].forEach(t=>gl.deleteTexture(t)); [...R.srcF,...R.fbF,R.anaF,R.histF].forEach(f=>gl.deleteFramebuffer(f)); gl.deleteBuffer(R.pbo); if(R.fence) gl.deleteSync(R.fence); }
-  ndiFree();
+  ndiFree(); mapFree();
   const src=[tex2D(W,H),tex2D(W,H)], fb=[tex2D(W,H,...FBFMT),tex2D(W,H,...FBFMT)];
   const long=288, hw=W>=H?long:Math.round(long*W/H), hh=W>=H?Math.round(long*H/W):long;
   const hist=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,hist);
@@ -522,6 +590,7 @@ function resize(){
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   A.reset(GX*GY);
   if(NDI.on) ndiAlloc();
+  mapAlloc();
 }
 
 /* ------------------------------ sources ------------------------------ */
@@ -827,9 +896,11 @@ function render(){
   }
   const cur=R.src[R.si], prev=R.src[R.si^1];
   const skipRead=R.justRead; R.justRead=false;
+  if(mode===MAP_MODE) mapDetect(cur);
   // 2. effect
   const fp=progs.fx[mode], nf=R.fi^1;
   pass(fp,R.fbF[nf],W,H); bind(0,cur); bind(1,prev); bind(2,R.fb[R.fi]); bind(3,R.hist,gl.TEXTURE_2D_ARRAY);
+  if(mode===MAP_MODE) mapUniforms(fp);
   gl.drawArrays(gl.TRIANGLES,0,3); R.fi=nf;
   // 3. analysis of what we just made
   if(!R.fence && !skipRead){
@@ -878,6 +949,8 @@ function frame(now){
   const dt=Math.min(.1,(now-lastNow)/1000); lastNow=now; T+=dt;
   if(R.fence){ const pdt=(now-lastPoll)/1000; const had=R.fence; pollAnalysis(Math.min(.2,pdt)); if(!R.fence&&had) lastPoll=now; }
   if(NDI.on) ndiPoll();
+  if(MAP.fence) mapPoll();
+  mapTick(dt);
   V.pulse*=Math.exp(-dt*5); V.glitch*=Math.exp(-dt*3.5); V.tintAmt*=Math.exp(-dt/12);
   V.focus+=(V.focusT-V.focus)*Math.min(1,dt*5);
   updateComets(dt);
@@ -989,6 +1062,139 @@ $('#ndiRes').onclick=e=>{ const v=e.target.dataset&&e.target.dataset.v; if(v) nd
 $('#ndiOri').onclick=e=>{ const v=e.target.dataset&&e.target.dataset.v; if(v) ndiSet(null,v); };
 function showToast(a,b){ const t=$('#toast'); t.querySelector('b').textContent=a; t.querySelector('span').textContent=b; t.classList.add('show'); clearTimeout(showToast.tm); showToast.tm=setTimeout(()=>t.classList.remove('show'),1600); }
 
+/* ------------------------------ MAP: find a surface, track it, paint on it ------------------------------
+   Every frame the camera is read back at ~160 px wide. Otsu picks a brightness threshold (nudged by
+   sensitivity), the biggest bright connected shape is taken, and its convex hull is reduced to the
+   largest inscribed quadrilateral. If that quad covers most of the hull it's a card: its corners are
+   smoothed (One-Euro) and a homography maps the pattern on in perspective. Otherwise the shape's own
+   mask is used and the pattern follows its centroid and orientation. */
+class OneEuro{ constructor(mc=1.6,beta=6,dc=1){ this.mc=mc; this.beta=beta; this.dc=dc; this.x=null; this.dx=0; }
+  a(c,dt){ const r=2*Math.PI*c*dt; return r/(r+1); }
+  f(x,dt){ if(this.x===null){ this.x=x; return x; } const dx=(x-this.x)/dt; this.dx+=this.a(this.dc,dt)*(dx-this.dx);
+    const c=this.mc+this.beta*Math.abs(this.dx); this.x+=this.a(c,dt)*(x-this.x); return this.x; }
+  reset(){ this.x=null; this.dx=0; } }
+const MAP={DW:160,DH:0,tex:null,fbo:null,pbo:null,fence:null,buf:null,lum:null,lab:null,stack:null,maskTex:null,mask:null,
+  have:0,kind:0,quad:null,hinv:new Float32Array([1,0,0,0,1,0,0,0,1]),asp:1,blob:[.5,.5,0,.2],thr:.5,lock:0,seen:-9,
+  filt:Array.from({length:8},()=>new OneEuro()),blobF:Array.from({length:4},()=>new OneEuro(1.2,4)),lastT:0,status:'',was:false,pat:-1};
+function mapFree(){ if(MAP.tex){ gl.deleteTexture(MAP.tex); gl.deleteFramebuffer(MAP.fbo); gl.deleteBuffer(MAP.pbo); gl.deleteTexture(MAP.maskTex); if(MAP.fence) gl.deleteSync(MAP.fence); }
+  Object.assign(MAP,{tex:null,fbo:null,pbo:null,maskTex:null,fence:null}); }
+function mapAlloc(){
+  const DW=MAP.DW, DH=Math.max(8,Math.round(DW*H/W)), N=DW*DH; MAP.DH=DH;
+  MAP.tex=tex2D(DW,DH,gl.RGBA8,gl.UNSIGNED_BYTE,gl.NEAREST); MAP.fbo=fbo(MAP.tex);
+  MAP.pbo=gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,MAP.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER,N*4,gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  MAP.buf=new Uint8Array(N*4); MAP.lum=new Uint8Array(N); MAP.lab=new Int32Array(N); MAP.stack=new Int32Array(N); MAP.mask=new Uint8Array(N);
+  MAP.maskTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,MAP.maskTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,DW,DH,0,gl.RED,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  MAP.quad=null; MAP.filt.forEach(f=>f.reset()); MAP.lock=0;
+}
+function mapDetect(cur){
+  if(MAP.fence) return;
+  const p=progs.det; pass(p,MAP.fbo,MAP.DW,MAP.DH); gl.uniform2f(U(p,'uDet'),MAP.DW,MAP.DH); bind(0,cur);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,MAP.pbo); gl.readPixels(0,0,MAP.DW,MAP.DH,gl.RGBA,gl.UNSIGNED_BYTE,0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  MAP.fence=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0); gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+function mapPoll(){
+  const st=gl.clientWaitSync(MAP.fence,0,0); if(st===gl.TIMEOUT_EXPIRED) return;
+  gl.deleteSync(MAP.fence); MAP.fence=null;
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,MAP.pbo); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,MAP.buf); gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  const now=performance.now()/1000, dt=Math.min(.2,Math.max(1/120,now-(MAP.lastT||now-1/30))); MAP.lastT=now;
+  mapFind(dt);
+}
+function otsu(h,n){ let sum=0; for(let i=0;i<256;i++) sum+=i*h[i]; let sB=0,wB=0,best=0,t=128;
+  for(let i=0;i<256;i++){ wB+=h[i]; if(!wB) continue; const wF=n-wB; if(!wF) break; sB+=i*h[i];
+    const mB=sB/wB, mF=(sum-sB)/wF, v=wB*wF*(mB-mF)*(mB-mF); if(v>best){ best=v; t=i; } } return t; }
+function hull(pts){ pts.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[],up=[]; for(const p of pts){ while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  up.pop(); lo.pop(); return lo.concat(up); }                       // counter-clockwise (y up)
+const polyArea=P=>{ let a=0; for(let i=0;i<P.length;i++){ const p=P[i],q=P[(i+1)%P.length]; a+=p[0]*q[1]-q[0]*p[1]; } return a/2; };
+function mapFind(dt){
+  const {DW,DH,buf,lum,lab,stack,mask}=MAP, N=DW*DH, h=new Uint32Array(256);
+  for(let i=0;i<N;i++){ const v=buf[i*4]; lum[i]=v; h[v]++; }
+  const t=Math.max(20,Math.min(235,otsu(h,N)+(.5-V.sens)*90)); MAP.thr=t/255;
+  // connected bright shapes (4-connectivity); keep the biggest that isn't the whole background
+  lab.fill(0); let best=0,bestA=0,nl=0;
+  for(let s0=0;s0<N;s0++){
+    if(lab[s0]||lum[s0]<=t) continue;
+    let sp=0,area=0,x0=DW,x1=0,y0=DH,y1=0; nl++; stack[sp++]=s0; lab[s0]=nl;
+    while(sp){ const i=stack[--sp], x=i%DW, y=(i/DW)|0; area++;
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      if(x>0&&!lab[i-1]&&lum[i-1]>t){lab[i-1]=nl;stack[sp++]=i-1;} if(x<DW-1&&!lab[i+1]&&lum[i+1]>t){lab[i+1]=nl;stack[sp++]=i+1;}
+      if(y>0&&!lab[i-DW]&&lum[i-DW]>t){lab[i-DW]=nl;stack[sp++]=i-DW;} if(y<DH-1&&!lab[i+DW]&&lum[i+DW]>t){lab[i+DW]=nl;stack[sp++]=i+DW;} }
+    const span=Math.max((x1-x0+1)/DW,(y1-y0+1)/DH);
+    if(area>N*.012 && area<N*.8 && span<.97 && area>bestA){ bestA=area; best=nl; }
+  }
+  if(!best){ MAP.lock=0; return; }
+  // mask, moments, row extremes for the hull
+  let mx=0,my=0,mxx=0,myy=0,mxy=0; const pts=[];
+  for(let y=0;y<DH;y++){ let a=-1,b=-1; for(let x=0;x<DW;x++){ const i=y*DW+x, on=lab[i]===best; mask[i]=on?255:0;
+      if(on){ if(a<0)a=x; b=x; mx+=x; my+=y; mxx+=x*x; myy+=y*y; mxy+=x*y; } }
+    if(a>=0){ pts.push([a,y],[b+1,y],[a,y+1],[b+1,y+1]); } }
+  gl.bindTexture(gl.TEXTURE_2D,MAP.maskTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false); gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+  gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,DW,DH,gl.RED,gl.UNSIGNED_BYTE,mask); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.pixelStorei(gl.UNPACK_ALIGNMENT,4);
+  const ar0=bestA; mx/=ar0; my/=ar0; const cxx=mxx/ar0-mx*mx, cyy=myy/ar0-my*my, cxy=mxy/ar0-mx*my;
+  const ang=.5*Math.atan2(2*cxy,cxx-cyy), size=Math.sqrt(Math.max(cxx,cyy))*2/DH;
+  // hull -> simplify -> largest inscribed quad
+  let Hl=hull(pts); const hullA=polyArea(Hl);
+  while(Hl.length>12){ let k=0,m=Infinity; for(let i=0;i<Hl.length;i++){ const a=Hl[(i+Hl.length-1)%Hl.length],b=Hl[i],c=Hl[(i+1)%Hl.length];
+      const ar=Math.abs((b[0]-a[0])*(c[1]-a[1])-(c[0]-a[0])*(b[1]-a[1])); if(ar<m){ m=ar; k=i; } } Hl.splice(k,1); }
+  let Q=null,qa=0; const n=Hl.length;
+  for(let a=0;a<n;a++) for(let b=a+1;b<n;b++) for(let c=b+1;c<n;c++) for(let d=c+1;d<n;d++){
+    const ar=polyArea([Hl[a],Hl[b],Hl[c],Hl[d]]); if(ar>qa){ qa=ar; Q=[Hl[a],Hl[b],Hl[c],Hl[d]]; } }
+  const isCard=Q && qa/hullA>.86 && minAngle(Q)>35;
+  MAP.kind=isCard?0:1; MAP.lock++; MAP.seen=T;
+  // blob pose (used for the mask mode)
+  const bp=[mx/DW,my/DH,ang,size]; let da=bp[2]-MAP.blob[2]; while(da>Math.PI/2) da-=Math.PI; while(da<-Math.PI/2) da+=Math.PI; bp[2]=MAP.blob[2]+da;
+  MAP.blob=bp.map((v,i)=>MAP.blobF[i].f(v,dt));
+  if(!isCard){ MAP.quad=null; MAP.filt.forEach(f=>f.reset()); return; }
+  let q=Q.map(([x,y])=>[x/DW,y/DH]);
+  // keep corner 0 where it was (else start bottom-left), so the pattern never spins
+  let r0=0;
+  if(MAP.quad){ let bd=Infinity; for(let r=0;r<4;r++){ let d=0; for(let i=0;i<4;i++){ const a=q[(i+r)%4],b=MAP.quad[i]; d+=Math.hypot(a[0]-b[0],a[1]-b[1]); } if(d<bd){ bd=d; r0=r; } } }
+  else { let m=Infinity; q.forEach((p,i)=>{ if(p[0]+p[1]<m){ m=p[0]+p[1]; r0=i; } }); }
+  q=[0,1,2,3].map(i=>q[(i+r0)%4]);
+  MAP.quad=q.map((p,i)=>[MAP.filt[i*2].f(p[0],dt),MAP.filt[i*2+1].f(p[1],dt)]);
+  const L=(a,b)=>Math.hypot((a[0]-b[0])*W,(a[1]-b[1])*H), P=MAP.quad;
+  MAP.asp=Math.max(.25,Math.min(4,(L(P[0],P[1])+L(P[3],P[2]))/Math.max(1,L(P[0],P[3])+L(P[1],P[2]))));
+  MAP.hinv=inv3(sq2quad(P));
+}
+function minAngle(Q){ let m=180; for(let i=0;i<4;i++){ const a=Q[(i+3)%4],b=Q[i],c=Q[(i+1)%4];
+  const u=[a[0]-b[0],a[1]-b[1]], v=[c[0]-b[0],c[1]-b[1]]; const g=Math.acos(Math.max(-1,Math.min(1,(u[0]*v[0]+u[1]*v[1])/(Math.hypot(...u)*Math.hypot(...v)+1e-9))))*180/Math.PI; m=Math.min(m,g); } return m; }
+function sq2quad(P){ // unit square (0,0),(1,0),(1,1),(0,1) -> quad; row-major 3x3
+  const [x0,y0]=P[0],[x1,y1]=P[1],[x2,y2]=P[2],[x3,y3]=P[3];
+  const sx=x0-x1+x2-x3, sy=y0-y1+y2-y3; let g=0,h=0;
+  if(Math.abs(sx)>1e-9||Math.abs(sy)>1e-9){ const dx1=x1-x2,dx2=x3-x2,dy1=y1-y2,dy2=y3-y2, den=dx1*dy2-dx2*dy1; g=(sx*dy2-dx2*sy)/den; h=(dx1*sy-sx*dy1)/den; }
+  return [x1-x0+g*x1, x3-x0+h*x3, x0, y1-y0+g*y1, y3-y0+h*y3, y0, g, h, 1]; }
+function inv3(m){ const [a,b,c,d,e,f,g,h,i]=m, A=e*i-f*h, B=-(d*i-f*g), C=d*h-e*g, det=a*A+b*B+c*C||1e-9;
+  const r=[A,-(b*i-c*h),b*f-c*e, B,a*i-c*g,-(a*f-c*d), C,-(a*h-b*g),a*e-b*d].map(v=>v/det);
+  return new Float32Array([r[0],r[3],r[6], r[1],r[4],r[7], r[2],r[5],r[8]]); }   // column-major for GLSL
+function mapTick(dt){
+  const want=(mode===MAP_MODE && MAP.lock>=2 && T-MAP.seen<.35)?1:0;
+  MAP.have+=(want-MAP.have)*Math.min(1,dt*(want?6:3));
+  const on=MAP.have>.5;
+  if(on&&!MAP.was&&started){ const [x,y]=MAP.kind===0&&MAP.quad?[(MAP.quad[0][0]+MAP.quad[2][0])/2,(MAP.quad[0][1]+MAP.quad[2][1])/2]:MAP.blob;
+    snd.bloom(snd.chord,x*2-1); V.pulse=1; (MAP.quad||[]).forEach(p=>sparks.push({x:p[0],y:p[1],col:[1,1,1],t:0,life:.8,max:90,kind:1})); }
+  MAP.was=on;
+  if(mode===MAP_MODE){
+    const pi=Math.min(MAP_PATS.length-1,Math.floor(params[mode]*MAP_PATS.length));
+    if(pi!==MAP.pat){ if(MAP.pat>=0&&started) showToast(MAP_PATS[pi],'pattern '+(pi+1)+' of '+MAP_PATS.length); MAP.pat=pi; }
+    const st=!on?'searching — hold up something bright':(MAP.kind===0?'locked on a card':'tracking a shape');
+    if(st!==MAP.status){ MAP.status=st; const sm=$('#mname small'); if(sm) sm.textContent=st; }
+  }
+}
+function mapUniforms(p){
+  bind(5,MAP.maskTex); gl.uniform1i(U(p,'uMask'),5);
+  gl.uniformMatrix3fv(U(p,'uHinv'),false,MAP.hinv);
+  gl.uniform1f(U(p,'uMapHave'),MAP.have); gl.uniform1i(U(p,'uMapKind'),MAP.kind); gl.uniform1f(U(p,'uThr'),MAP.thr);
+  gl.uniform1f(U(p,'uCardAsp'),MAP.asp); gl.uniform4f(U(p,'uBlob'),...MAP.blob);
+  gl.uniform1f(U(p,'uHue'),snd.chord.hue); gl.uniform3f(U(p,'uTint'),...V.tint); gl.uniform1f(U(p,'uTintAmt'),V.tintAmt);
+  gl.uniform1i(U(p,'uPat'),Math.max(0,MAP.pat));
+}
+
 /* ------------------------------ UI ------------------------------ */
 const hud=$('#hud'); let hudHidden=false;
 const dots=$('#dots'); MODES.forEach(()=>dots.appendChild(document.createElement('i')));
@@ -1000,7 +1206,7 @@ function showMode(toast=true){
 }
 $('#mname').onclick=e=>{ e.stopPropagation(); if(started) setMode(mode+1); };
 $('#dots').onclick=e=>{ e.stopPropagation(); const i=[...$('#dots').children].indexOf(e.target); if(started&&i>=0) setMode(i); };
-function setMode(m){ mode=(m+MODES.length)%MODES.length; snd.setMode(MODES[mode].snd); V.glitch=Math.max(V.glitch,.5); showMode(); }
+function setMode(m){ MAP.status=''; MAP.pat=-1; mode=(m+MODES.length)%MODES.length; snd.setMode(MODES[mode].snd); V.glitch=Math.max(V.glitch,.5); showMode(); }
 function showParam(){ const p=$('#param'); p.querySelector('i').style.height=(params[mode]*100)+'%'; p.classList.add('show'); clearTimeout(showParam.tm); showParam.tm=setTimeout(()=>p.classList.remove('show'),900); }
 function setHud(hidden){ hudHidden=hidden; hud.classList.toggle('off',hidden); }
 function note(msg){ $('#note').textContent=msg||''; }
@@ -1124,7 +1330,7 @@ addEventListener('resize',()=>resize());
 resize(); showMode(false); setChord(NEUTRAL);
 requestAnimationFrame(frame);
 // test hook (harmless in normal use)
-window.__AD={setMode,go,get mode(){return mode},A,V,comets,spawnComet,NDI,ndiSet};
+window.__AD={setMode,go,get mode(){return mode},A,V,comets,spawnComet,NDI,ndiSet,MAP,params};
 </script>
 </body>
 </html>

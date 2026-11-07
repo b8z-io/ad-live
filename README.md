@@ -43,5 +43,28 @@ app's WebView for the console, performance and live edits.
 
 ## Effects
 
-LATTICE · SMEAR · ECHO · DOME · NEON · DRIP. Swipe left/right to change, drag up/down to shape,
+LATTICE · SMEAR · ECHO · DOME · NEON · DRIP · MAP.
+
+### MAP — painting onto a surface
+
+The first step towards automatic projection mapping. Hold up a card, a sheet of paper or any bright
+object (front or rear camera) and MAP paints generative media onto it in real time:
+
+- Every frame the camera is read back at ~160 px wide; Otsu picks a brightness threshold (nudged by the
+  sensitivity control) and the biggest bright connected shape is taken.
+- Its convex hull is reduced to the largest inscribed quadrilateral. If that covers > 86 % of the hull
+  it's treated as a **card**: corners are smoothed with a One-Euro filter, kept in a stable order, and a
+  homography maps the pattern on in perspective, scaled to the card's aspect.
+- Otherwise it's a **shape**: the pattern fills the shape's own mask and follows its centroid and
+  orientation (image moments).
+- Anything darker than the surface (fingers, shadows) stays in front of the pattern; the surface's own
+  light and creases still show through. The rest of the frame is dimmed like a darkened venue.
+- Drag up/down picks the pattern: CONTOURS · CAUSTICS · TRUCHET · LATTICE · OP-ART, coloured by the
+  current chord and by comets; a chord blooms when it locks on.
+
+Tested on a synthetic clip with known corners (card swinging ±38° with a finger over one edge): locked
+on every sample, median corner error ~7 px on 480×854 in a software-rendered browser.
+
+Next steps toward projector mapping: multiple surfaces, then camera → projector calibration
+(structured light) so the output can be thrown back onto the real object over NDI. Swipe left/right to change, drag up/down to shape,
 hold to hyperfocus on one colour, double-tap to flip camera, tap to hide controls.
