@@ -45,25 +45,29 @@ app's WebView for the console, performance and live edits.
 
 LATTICE · SMEAR · ECHO · DOME · NEON · DRIP · MAP.
 
-### MAP — painting onto a surface
+### MAP — painting onto surfaces
 
-The first step towards automatic projection mapping. Hold up a card, a sheet of paper or any bright
-object (front or rear camera) and MAP paints generative media onto it in real time:
+The first step towards automatic projection mapping. Hold up cards, paper, a box or any bright object
+(front or rear camera) and MAP paints generative media onto up to **four surfaces** at once:
 
-- Every frame the camera is read back at ~160 px wide; Otsu picks a brightness threshold (nudged by the
-  sensitivity control) and the biggest bright connected shape is taken.
-- Its convex hull is reduced to the largest inscribed quadrilateral. If that covers > 86 % of the hull
-  it's treated as a **card**: corners are smoothed with a One-Euro filter, kept in a stable order, and a
-  homography maps the pattern on in perspective, scaled to the card's aspect.
-- Otherwise it's a **shape**: the pattern fills the shape's own mask and follows its centroid and
-  orientation (image moments).
-- Anything darker than the surface (fingers, shadows) stays in front of the pattern; the surface's own
-  light and creases still show through. The rest of the frame is dimmed like a darkened venue.
-- Drag up/down picks the pattern: CONTOURS · CAUSTICS · TRUCHET · LATTICE · OP-ART, coloured by the
-  current chord and by comets; a chord blooms when it locks on.
+- Every frame the camera is read back at ~160 px wide and lightly blurred; Otsu picks a brightness
+  threshold (nudged by the sensitivity control).
+- **Facets:** inside the bright area, regions grow only across small brightness steps (≤ 9/255 between
+  neighbours). The faces of a box are lit differently, so they separate at their creases; shading across one
+  face doesn't split it. Separate cards are separate regions anyway. The four biggest are kept.
+- Each region's convex hull is reduced to its largest inscribed quadrilateral. If that covers > 86 % of the
+  hull it's a **surface**: corners smoothed with a One-Euro filter, kept in a stable order, and a homography
+  maps the pattern on in perspective at the surface's aspect. Otherwise it's a **shape**: the pattern fills
+  its own mask and follows its centroid and orientation.
+- Regions are matched to four tracking slots by centroid, so each face keeps its smoothing, corner order and
+  colour offset from frame to frame. Every surface gets an edge trace.
+- Anything darker than a surface (fingers, shadows) stays in front; the surface's own shading shows through.
+- Drag up/down picks the pattern: CONTOURS · CAUSTICS · TRUCHET · LATTICE · OP-ART · JELLYFISH (the orange
+  Voronoi mesh from [dumpling-launcher](https://github.com/b8z-io/dumpling-launcher) / the ISE 2027 saver).
 
-Tested on a synthetic clip with known corners (card swinging ±38° with a finger over one edge): locked
-on every sample, median corner error ~7 px on 480×854 in a software-rendered browser.
+Tested on rendered clips with known corners: a single card swinging ±38° with a finger over one edge (locked on
+every sample, median corner error ~7 px on 480×854), and a turning box (2–3 faces) plus a separate card (82 % of
+faces found as separate surfaces, median error 7 px, p90 11 px). Faces lit almost identically merge into one shape.
 
 Next steps toward projector mapping: multiple surfaces, then camera → projector calibration
 (structured light) so the output can be thrown back onto the real object over NDI. Swipe left/right to change, drag up/down to shape,
